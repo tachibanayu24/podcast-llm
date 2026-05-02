@@ -23,6 +23,8 @@ export function EpisodeRow({
   const toggle = usePlayerStore((s) => s.toggle);
   const currentId = usePlayerStore((s) => s.episode?.id);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
+  const livePosition = usePlayerStore((s) => s.position);
+  const liveDuration = usePlayerStore((s) => s.duration);
 
   const isCurrent = currentId === episode.id;
   const showPause = isCurrent && isPlaying;
@@ -34,22 +36,25 @@ export function EpisodeRow({
     else load(episode, { podcastTitle: podcast?.title });
   }
 
-  const playback = episode.playback;
-  const completed = !!playback?.completed;
+  // Prefer live player state for the currently-playing episode so the bar
+  // moves in real time. Otherwise fall back to the persisted Firestore value.
+  const position = isCurrent ? livePosition : (episode.playback?.position ?? 0);
+  const totalDuration =
+    isCurrent && liveDuration > 0
+      ? liveDuration
+      : (episode.duration ?? 0);
+  const completed = !isCurrent && !!episode.playback?.completed;
   const inProgress =
     !completed &&
-    !!playback?.position &&
-    playback.position > 30 && // ignore tiny tap/seek noise
-    !!episode.duration &&
-    playback.position < episode.duration - 30;
+    position > 30 && // ignore tiny tap/seek noise
+    totalDuration > 0 &&
+    position < totalDuration - 30;
   const progressPercent =
-    inProgress && episode.duration
-      ? Math.min(100, (playback.position / episode.duration) * 100)
+    inProgress && totalDuration > 0
+      ? Math.min(100, (position / totalDuration) * 100)
       : 0;
   const remainingSec =
-    inProgress && episode.duration
-      ? Math.max(0, episode.duration - playback.position)
-      : 0;
+    inProgress && totalDuration > 0 ? Math.max(0, totalDuration - position) : 0;
 
   return (
     <Card
