@@ -202,3 +202,46 @@ background: linear-gradient(
 ```
 
 JSX 側で `style={{ "--progress": "42%" }}` を渡す。div を重ねて作るより薄い。
+
+---
+
+## 2026-05-02: 文字起こしを起点にしない設計に切り替え
+
+最初は「Geminiで音声を文字起こし→そこから要約・QA・翻訳」という単線設計で考えてた。しかし実際にRSSフィードを4つ叩いてみたら、想像より既存メタデータがリッチだった。
+
+| 番組 | psc:chapters | podcast:transcript | show notes |
+|---|---|---|---|
+| Rebuild | 9個ガッツリ | 無 | リンク21個 |
+| LISTEN.style系 | あり(JSON) | VTT(話者ラベル付!) | 簡易 |
+| fukabori.fm / mozaic.fm | 無 | 無 | 概要程度 |
+
+LISTEN.style はホスト側でAI文字起こしまで済ませて、`<v 話者名>` タグ付きVTTをRSSに同梱してくれる。Rebuildは `psc:chapters` がXMLに直書きされてる(Podlove Simple Chapters)。show notesのHTMLにも書き手の整理した要点+リンク集が入っている。
+
+つまり「文字起こしは自前で取る前提」だと**ある番組ではGeminiに$0.2/エピ払って既存VTTを再生成してる無駄**が発生する。
+
+### 修正後のアーキテクチャ
+コンテキストを階層化して、要約・QA・翻訳は「使えるものを使う」方針に。
+
+1. **Layer 1 (free, instant)**: RSSパース時に `psc:chapters`(XML埋込) / `podcast:transcript` URL / `podcast:chapters` URL / show notes(HTML本体+リンク+timestamp抽出) を全部取る
+2. **Layer 2 (cheap, on demand)**: 詳細ページ初回表示時に `getEpisodeContext` 関数が transcript/chapters URL を fetch+parse+保存
+3. **Layer 3 (paid, manual)**: trascript も chapters も無い場合のみ「AIで生成」ボタンで Vertex AI Gemini 2.5 Flash 起動。1時間音声で約60-90円
+
+要約とQAは「transcript ? + chapters + show notes」のセットを材料に動く。トランスクリプト無くてもshow notesが詳しい番組(Rebuildとか)なら、要約もQAもまともに機能する。これに気づいたのがデカい。
+
+### Vertex AI に切り替えた理由
+最初 `@ai-sdk/google` (Gemini Developer API)で進めてたが、podcast音声の典型サイズ (1時間=30-60MB)は inline base64 (20MB上限)に乗らず、 Files APIでアップロード→ファイルURI参照の二段が必要。一方Vertex AIは `gs://` URIを直接 `fileData.fileUri` で渡せる。Cloud FunctionsのADCで認証も自動。`GEMINI_API_KEY` シークレット要らなくなった。
+
+`@ai-sdk/google-vertex` の `tools.googleSearch({})` も透過的に使えてQA時のグラウンディングも済む。
+
+### show notes HTML はサニタイズして表示
+最初 `stripHtml()` してプレーンテキスト化してたら、フォーマットや見出しが消えて読みにくいと指摘された。Episode型に `showNotes.html` を追加してオリジナル保持、クライアントで DOMPurify サニタイズ。`text` フィールドは LLM コンテキスト用に残す(LLMにHTMLを食わせる意味はないので)。
+
+### オフライン
+PWA本体はservice workerで、音声は IndexedDB(idb-keyval)に Blob 保存。再生時にPlayer.tsxが `getOfflineAudioBlob()` を見て、あれば `URL.createObjectURL(blob)` で blob URL に差し替える。
+
+注意: 音声URL のCORSが許可されてないホストでは `fetch()` 失敗する。そういうホストはサーバ側にプロキシ用の関数を置くか、潔くサポート外にするしかない。今のところは試してみてダメなら諦める運用。
+
+### 既存購読データの後方互換
+新しいRSSパーサで取れるフィールド(showNotes/chapters等)は、既に購読済みのエピソードには入ってない。`refreshFeeds` は新エピソードのみ追加するので既存エピソードは更新されない。
+
+回避: 当面はユーザが必要なエピソードを開いたら `getEpisodeContext` が transcript/chapters URLは backfill してくれる。show notes HTML だけは未取得のまま残る。気になったら後で「メタデータ再取得」ジョブを足す。
