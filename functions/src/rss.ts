@@ -1,5 +1,6 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
+import { logger } from "firebase-functions/v2";
 import { FieldValue } from "firebase-admin/firestore";
 import type { Episode, Podcast, SearchResult } from "./lib/types.js";
 import { db } from "./lib/admin.js";
@@ -81,8 +82,68 @@ export const refreshFeeds = onSchedule(
     region: "asia-northeast1",
     schedule: "every 6 hours",
     timeZone: "Asia/Tokyo",
+    timeoutSeconds: 540,
+    memory: "512MiB",
   },
   async () => {
-    // TODO: 全ユーザーの購読を巡回してRSS再取得
+    const snap = await db.collectionGroup("podcasts").get();
+    logger.info("refreshFeeds: scanning", { podcasts: snap.size });
+
+    let totalNew = 0;
+    let errors = 0;
+
+    for (const podcastDoc of snap.docs) {
+      const podcast = podcastDoc.data() as Podcast;
+      const userId = podcastDoc.ref.parent.parent?.id;
+      if (!userId || !podcast.feedUrl) continue;
+
+      try {
+        const parsed = await fetchAndParseFeed(podcast.feedUrl, podcast.id);
+
+        const existingSnap = await db
+          .collection(`users/${userId}/episodes`)
+          .where("podcastId", "==", podcast.id)
+          .select()
+          .get();
+        const existingIds = new Set(existingSnap.docs.map((d) => d.id));
+
+        const newEpisodes = parsed.episodes.filter(
+          (ep) => ep.audioUrl && !existingIds.has(ep.id),
+        );
+
+        if (newEpisodes.length > 0) {
+          const batch = db.batch();
+          for (const ep of newEpisodes) {
+            const episode: Episode = {
+              ...ep,
+              podcastId: podcast.id,
+              isInWatchlist: false,
+              isDownloaded: false,
+              playback: { position: 0, completed: false },
+            };
+            batch.set(
+              db.doc(`users/${userId}/episodes/${ep.id}`),
+              { ...episode, _updatedAt: FieldValue.serverTimestamp() },
+              { merge: true },
+            );
+          }
+          await batch.commit();
+          totalNew += newEpisodes.length;
+        }
+
+        await podcastDoc.ref.update({
+          lastFetchedAt: Date.now(),
+          episodeCount: existingIds.size + newEpisodes.length,
+        });
+      } catch (err) {
+        errors++;
+        logger.error("refreshFeeds: failed", {
+          podcastId: podcast.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    logger.info("refreshFeeds: done", { totalNew, errors });
   },
 );
