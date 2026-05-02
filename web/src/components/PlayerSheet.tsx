@@ -1,27 +1,44 @@
-import { Bookmark, ChevronDown, Pause, Play, RotateCcw, X } from "lucide-react";
-import { useEffect } from "react";
+import {
+  AlertCircle,
+  Bookmark,
+  ChevronDown,
+  Pause,
+  Play,
+  RotateCcw,
+  X,
+} from "lucide-react";
+import { useEffect, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { Button } from "@/components/ui/button";
 import { useWatchlistToggle } from "@/hooks/useWatchlistToggle";
+import { formatTimestamp } from "@/lib/format";
 import { usePlayerStore } from "@/lib/player-store";
 import { cn } from "@/lib/utils";
 
-const RATES = [1, 1.25, 1.5, 1.75, 2] as const;
-
-function formatTime(sec: number): string {
-  if (!sec || !isFinite(sec)) return "0:00";
-  const m = Math.floor(sec / 60);
-  const s = Math.floor(sec % 60);
-  return `${m}:${s.toString().padStart(2, "0")}`;
-}
+const RATES = [0.9, 1, 1.25, 1.5, 1.75, 2] as const;
 
 export function PlayerSheet() {
-  const isExpanded = usePlayerStore((s) => s.isExpanded);
-  const episode = usePlayerStore((s) => s.episode);
-  const podcastTitle = usePlayerStore((s) => s.podcastTitle);
-  const isPlaying = usePlayerStore((s) => s.isPlaying);
-  const position = usePlayerStore((s) => s.position);
-  const duration = usePlayerStore((s) => s.duration);
-  const playbackRate = usePlayerStore((s) => s.playbackRate);
+  const {
+    isExpanded,
+    episode,
+    podcastTitle,
+    isPlaying,
+    position,
+    duration,
+    playbackRate,
+    error,
+  } = usePlayerStore(
+    useShallow((s) => ({
+      isExpanded: s.isExpanded,
+      episode: s.episode,
+      podcastTitle: s.podcastTitle,
+      isPlaying: s.isPlaying,
+      position: s.position,
+      duration: s.duration,
+      playbackRate: s.playbackRate,
+      error: s.error,
+    })),
+  );
   const toggle = usePlayerStore((s) => s.toggle);
   const seek = usePlayerStore((s) => s.seek);
   const skipBack = usePlayerStore((s) => s.skipBack);
@@ -29,6 +46,10 @@ export function PlayerSheet() {
   const setRate = usePlayerStore((s) => s.setRate);
   const collapse = usePlayerStore((s) => s.collapse);
   const close = usePlayerStore((s) => s.close);
+  const retry = usePlayerStore((s) => s.retry);
+
+  // Scrubbing: keep local state during drag, commit on release
+  const [scrubValue, setScrubValue] = useState<number | null>(null);
 
   useEffect(() => {
     if (!isExpanded) return;
@@ -50,7 +71,15 @@ export function PlayerSheet() {
 
   if (!episode) return null;
 
-  const remaining = Math.max(0, duration - position);
+  const displayPosition = scrubValue ?? position;
+  const remaining = Math.max(0, duration - displayPosition);
+  const progressPercent =
+    duration > 0 ? (displayPosition / duration) * 100 : 0;
+
+  function commitScrub(value: number) {
+    seek(value);
+    setScrubValue(null);
+  }
 
   return (
     <div
@@ -85,7 +114,7 @@ export function PlayerSheet() {
             variant="ghost"
             size="icon"
             onClick={collapse}
-            aria-label="閉じる"
+            aria-label="最小化"
             className="shrink-0"
           >
             <ChevronDown className="size-6" />
@@ -131,26 +160,51 @@ export function PlayerSheet() {
           )}
         </div>
 
+        {/* Error banner */}
+        {error && (
+          <div className="mt-4 px-3 py-2.5 rounded-lg bg-destructive/10 border border-destructive/30 text-xs text-destructive flex items-center gap-2">
+            <AlertCircle className="size-4 shrink-0" />
+            <span className="flex-1">{error.message}</span>
+            <button
+              type="button"
+              onClick={retry}
+              className="font-medium underline underline-offset-2"
+            >
+              再試行
+            </button>
+          </div>
+        )}
+
         {/* Seek */}
         <div className="mt-6 space-y-1.5">
           <input
             type="range"
             min={0}
             max={duration > 0 ? duration : 1}
-            value={position}
+            value={displayPosition}
             step={1}
-            onChange={(e) => seek(Number(e.target.value))}
+            onChange={(e) => setScrubValue(Number(e.target.value))}
+            onPointerUp={(e) => commitScrub(Number(e.currentTarget.value))}
+            onKeyUp={(e) => {
+              const v = Number(e.currentTarget.value);
+              if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+                commitScrub(v);
+              }
+            }}
+            onBlur={(e) => {
+              if (scrubValue != null) commitScrub(Number(e.currentTarget.value));
+            }}
             aria-label="シーク"
             className="player-range w-full"
             style={
               {
-                "--progress": `${duration > 0 ? (position / duration) * 100 : 0}%`,
+                "--progress": `${progressPercent}%`,
               } as React.CSSProperties
             }
           />
           <div className="flex justify-between text-[11px] text-muted-foreground tabular-nums">
-            <span>{formatTime(position)}</span>
-            <span>-{formatTime(remaining)}</span>
+            <span>{formatTimestamp(displayPosition)}</span>
+            <span>-{formatTimestamp(remaining)}</span>
           </div>
         </div>
 

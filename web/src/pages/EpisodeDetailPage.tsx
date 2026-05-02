@@ -180,7 +180,7 @@ function Hero({
 
   function handlePlay() {
     if (isCurrent) toggle();
-    else load(episode, podcast?.title);
+    else load(episode, { podcastTitle: podcast?.title });
   }
 
   const dlPercent =
@@ -481,8 +481,8 @@ function ChaptersSection({
   episode: Episode;
   source?: Episode["chaptersSource"];
 }) {
-  const load = usePlayerStore((s) => s.load);
   const seek = usePlayerStore((s) => s.seek);
+  const loadAndSeek = usePlayerStore((s) => s.loadAndSeek);
   const currentId = usePlayerStore((s) => s.episode?.id);
   const position = usePlayerStore((s) => s.position);
 
@@ -490,8 +490,7 @@ function ChaptersSection({
     if (currentId === episode.id) {
       seek(start);
     } else {
-      load(episode);
-      setTimeout(() => seek(start), 50);
+      loadAndSeek(episode, start);
     }
   }
 
@@ -596,7 +595,7 @@ function TranscriptSection({
 }) {
   const queryClient = useQueryClient();
   const seek = usePlayerStore((s) => s.seek);
-  const load = usePlayerStore((s) => s.load);
+  const loadAndSeek = usePlayerStore((s) => s.loadAndSeek);
   const currentId = usePlayerStore((s) => s.episode?.id);
   const position = usePlayerStore((s) => s.position);
 
@@ -611,10 +610,7 @@ function TranscriptSection({
 
   function jump(start: number) {
     if (currentId === episode.id) seek(start);
-    else {
-      load(episode);
-      setTimeout(() => seek(start), 50);
-    }
+    else loadAndSeek(episode, start);
   }
 
   const minutes = episode.duration ? Math.round(episode.duration / 60) : null;

@@ -2,6 +2,16 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Episode } from "@podcast-llm/shared";
 
+export type PlayerError =
+  | { kind: "playback"; message: string }
+  | { kind: "load"; message: string };
+
+interface LoadOptions {
+  podcastTitle?: string;
+  startAt?: number;
+  autoplay?: boolean;
+}
+
 interface PlayerState {
   episode: Episode | null;
   podcastTitle: string | null;
@@ -11,7 +21,15 @@ interface PlayerState {
   isExpanded: boolean;
   playbackRate: number;
 
-  load: (episode: Episode, podcastTitle?: string) => void;
+  /** Pending seek to apply once audio metadata is loaded. */
+  pendingSeek: number | null;
+  /** Last error from audio element. UI displays + retry. */
+  error: PlayerError | null;
+  /** Increments to force the audio element to re-attempt load. */
+  loadVersion: number;
+
+  load: (episode: Episode, options?: LoadOptions) => void;
+  loadAndSeek: (episode: Episode, sec: number, podcastTitle?: string) => void;
   play: () => void;
   pause: () => void;
   toggle: () => void;
@@ -21,8 +39,14 @@ interface PlayerState {
   setPosition: (sec: number) => void;
   setDuration: (sec: number) => void;
   setRate: (rate: number) => void;
+
+  consumePendingSeek: () => number | null;
+  setError: (error: PlayerError | null) => void;
+  retry: () => void;
+
   expand: () => void;
   collapse: () => void;
+  /** Stop playback and remove episode from player. */
   close: () => void;
 }
 
@@ -39,39 +63,70 @@ export const usePlayerStore = create<PlayerState>()(
       duration: 0,
       isExpanded: false,
       playbackRate: 1,
+      pendingSeek: null,
+      error: null,
+      loadVersion: 0,
 
-      load: (episode, podcastTitle) => {
+      load: (episode, options = {}) => {
         const { episode: prev } = get();
-        if (prev?.id === episode.id) {
-          set({ isPlaying: true });
+        const isSame = prev?.id === episode.id;
+        const startAt = options.startAt;
+        const autoplay = options.autoplay ?? true;
+
+        if (isSame) {
+          set({
+            isPlaying: autoplay,
+            error: null,
+            ...(startAt != null ? { pendingSeek: startAt, position: startAt } : {}),
+          });
           return;
         }
+
         set({
           episode,
-          podcastTitle: podcastTitle ?? null,
-          isPlaying: true,
-          position: episode.playback?.position ?? 0,
+          podcastTitle: options.podcastTitle ?? null,
+          isPlaying: autoplay,
+          position: startAt ?? episode.playback?.position ?? 0,
           duration: episode.duration ?? 0,
+          pendingSeek: startAt ?? episode.playback?.position ?? null,
+          error: null,
         });
       },
 
-      play: () => set({ isPlaying: true }),
-      pause: () => set({ isPlaying: false }),
-      toggle: () => set((s) => ({ isPlaying: !s.isPlaying })),
+      loadAndSeek: (episode, sec, podcastTitle) => {
+        get().load(episode, { podcastTitle, startAt: sec });
+      },
 
-      seek: (sec) => set({ position: sec }),
+      play: () => set({ isPlaying: true, error: null }),
+      pause: () => set({ isPlaying: false }),
+      toggle: () => set((s) => ({ isPlaying: !s.isPlaying, error: null })),
+
+      seek: (sec) => set({ position: sec, pendingSeek: sec }),
       skipBack: () => {
         const { position } = get();
-        set({ position: Math.max(0, position - SKIP_BACK) });
+        const next = Math.max(0, position - SKIP_BACK);
+        set({ position: next, pendingSeek: next });
       },
       skipForward: () => {
         const { position, duration } = get();
-        const next = position + SKIP_FORWARD;
-        set({ position: duration > 0 ? Math.min(duration, next) : next });
+        const candidate = position + SKIP_FORWARD;
+        const next = duration > 0 ? Math.min(duration, candidate) : candidate;
+        set({ position: next, pendingSeek: next });
       },
       setPosition: (sec) => set({ position: sec }),
       setDuration: (sec) => set({ duration: sec }),
       setRate: (rate) => set({ playbackRate: rate }),
+
+      consumePendingSeek: () => {
+        const { pendingSeek } = get();
+        if (pendingSeek != null) set({ pendingSeek: null });
+        return pendingSeek;
+      },
+      setError: (error) =>
+        set({ error, ...(error ? { isPlaying: false } : {}) }),
+      retry: () => {
+        set((s) => ({ error: null, isPlaying: true, loadVersion: s.loadVersion + 1 }));
+      },
 
       expand: () => set({ isExpanded: true }),
       collapse: () => set({ isExpanded: false }),
@@ -84,11 +139,28 @@ export const usePlayerStore = create<PlayerState>()(
           position: 0,
           duration: 0,
           isExpanded: false,
+          pendingSeek: null,
+          error: null,
         }),
     }),
     {
       name: "podcast-llm.player",
-      partialize: (s) => ({ playbackRate: s.playbackRate }),
+      partialize: (s) => ({
+        playbackRate: s.playbackRate,
+        episode: s.episode,
+        podcastTitle: s.podcastTitle,
+        position: s.position,
+        duration: s.duration,
+      }),
+      // After hydration, never auto-resume playback
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          state.isPlaying = false;
+          state.isExpanded = false;
+          state.pendingSeek = state.position > 0 ? state.position : null;
+          state.error = null;
+        }
+      },
     },
   ),
 );

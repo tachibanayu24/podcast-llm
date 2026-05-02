@@ -31,7 +31,7 @@ export function EpisodeRow({
 
   function handlePlay() {
     if (isCurrent) toggle();
-    else load(episode, podcast?.title);
+    else load(episode, { podcastTitle: podcast?.title });
   }
 
   return (

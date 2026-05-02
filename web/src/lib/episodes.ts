@@ -6,6 +6,7 @@ import {
   limit,
   orderBy,
   query,
+  setDoc,
   updateDoc,
   where,
 } from "firebase/firestore";
@@ -30,11 +31,19 @@ export async function savePlaybackPosition(
 ): Promise<void> {
   const uid = auth.currentUser?.uid;
   if (!uid) return;
-  await updateDoc(doc(db, "users", uid, "episodes", episodeId), {
-    "playback.position": position,
-    "playback.completed": completed,
-    "playback.lastPlayedAt": Date.now(),
-  });
+  // setDoc(merge) so it works even if the episode doc hasn't been
+  // initialized for this user yet (rare, but updateDoc would throw).
+  await setDoc(
+    doc(db, "users", uid, "episodes", episodeId),
+    {
+      playback: {
+        position,
+        completed,
+        lastPlayedAt: Date.now(),
+      },
+    },
+    { merge: true },
+  );
 }
 
 export async function setWatchlist(
