@@ -10,6 +10,7 @@ import { AppShell } from "./components/AppShell";
 import { HomePage } from "./pages/HomePage";
 import { PodcastDetailPage } from "./pages/PodcastDetailPage";
 import { SearchPage } from "./pages/SearchPage";
+import { SettingsPage } from "./pages/SettingsPage";
 import { SignInPage } from "./pages/SignInPage";
 
 interface RouterContext {
@@ -56,9 +57,20 @@ const podcastDetailRoute = createRoute({
   component: PodcastDetailPage,
 });
 
+const settingsRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: "/settings",
+  component: SettingsPage,
+});
+
 const routeTree = rootRoute.addChildren([
   signInRoute,
-  protectedRoute.addChildren([indexRoute, searchRoute, podcastDetailRoute]),
+  protectedRoute.addChildren([
+    indexRoute,
+    searchRoute,
+    podcastDetailRoute,
+    settingsRoute,
+  ]),
 ]);
 
 export const router = createRouter({

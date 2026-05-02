@@ -1,0 +1,56 @@
+import { Link } from "@tanstack/react-router";
+import { Library, Search, Settings } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+const items = [
+  { to: "/" as const, icon: Library, label: "ライブラリ", exact: true },
+  { to: "/search" as const, icon: Search, label: "検索", exact: false },
+  { to: "/settings" as const, icon: Settings, label: "設定", exact: false },
+];
+
+export function BottomNav() {
+  return (
+    <nav
+      className={cn(
+        "fixed bottom-0 inset-x-0 z-40",
+        "border-t border-border bg-background/85 backdrop-blur-xl",
+        "pb-[env(safe-area-inset-bottom)]",
+      )}
+    >
+      <ul className="mx-auto max-w-md grid grid-cols-3">
+        {items.map((item) => (
+          <li key={item.to}>
+            <Link
+              to={item.to}
+              activeOptions={{ exact: item.exact }}
+              className="flex flex-col items-center gap-1 py-2.5 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+              activeProps={{
+                className:
+                  "flex flex-col items-center gap-1 py-2.5 text-[11px] text-foreground",
+              }}
+            >
+              {({ isActive }) => (
+                <>
+                  <span
+                    className={cn(
+                      "grid place-items-center size-9 rounded-full transition-all duration-200",
+                      isActive && "bg-primary/15",
+                    )}
+                  >
+                    <item.icon
+                      className={cn(
+                        "size-5 transition-colors",
+                        isActive && "text-primary",
+                      )}
+                    />
+                  </span>
+                  <span className="font-medium">{item.label}</span>
+                </>
+              )}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
