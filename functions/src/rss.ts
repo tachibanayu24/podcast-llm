@@ -77,6 +77,86 @@ export const subscribePodcast = onCall<
   },
 );
 
+export const refreshMyFeeds = onCall<
+  Record<string, never>,
+  Promise<{ ok: true; podcasts: number; newEpisodes: number; errors: number }>
+>(
+  {
+    region: "asia-northeast1",
+    maxInstances: 2,
+    timeoutSeconds: 540,
+    memory: "512MiB",
+    invoker: "public",
+  },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "auth required");
+
+    const podcastsSnap = await db.collection(`users/${uid}/podcasts`).get();
+    let newEpisodes = 0;
+    let errors = 0;
+
+    for (const podcastDoc of podcastsSnap.docs) {
+      const podcast = podcastDoc.data() as Podcast;
+      if (!podcast.feedUrl) continue;
+      try {
+        const parsed = await fetchAndParseFeed(podcast.feedUrl, podcast.id);
+        const existingSnap = await db
+          .collection(`users/${uid}/episodes`)
+          .where("podcastId", "==", podcast.id)
+          .select()
+          .get();
+        const existingIds = new Set(existingSnap.docs.map((d) => d.id));
+
+        const valid = parsed.episodes.filter((ep) => ep.audioUrl);
+        const CHUNK = 400;
+        for (let i = 0; i < valid.length; i += CHUNK) {
+          const chunk = valid.slice(i, i + CHUNK);
+          const batch = db.batch();
+          for (const ep of chunk) {
+            const isNew = !existingIds.has(ep.id);
+            if (isNew) newEpisodes++;
+            const update: Record<string, unknown> = {
+              ...ep,
+              podcastId: podcast.id,
+              _updatedAt: FieldValue.serverTimestamp(),
+            };
+            if (isNew) {
+              update.isInWatchlist = false;
+              update.isDownloaded = false;
+              update.playback = { position: 0, completed: false };
+            }
+            batch.set(
+              db.doc(`users/${uid}/episodes/${ep.id}`),
+              update,
+              { merge: true },
+            );
+          }
+          await batch.commit();
+        }
+
+        await podcastDoc.ref.update({
+          lastFetchedAt: Date.now(),
+          episodeCount: valid.length,
+        });
+      } catch (err) {
+        errors++;
+        logger.error("refreshMyFeeds: failed", {
+          podcastId: podcast.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    return {
+      ok: true,
+      podcasts: podcastsSnap.size,
+      newEpisodes,
+      errors,
+    };
+  },
+);
+
 export const refreshFeeds = onSchedule(
   {
     region: "asia-northeast1",
@@ -107,33 +187,43 @@ export const refreshFeeds = onSchedule(
           .get();
         const existingIds = new Set(existingSnap.docs.map((d) => d.id));
 
-        const newEpisodes = parsed.episodes.filter(
-          (ep) => ep.audioUrl && !existingIds.has(ep.id),
-        );
+        let newCount = 0;
+        const validEpisodes = parsed.episodes.filter((ep) => ep.audioUrl);
 
-        if (newEpisodes.length > 0) {
+        // Chunk to stay under Firestore batch limit (500 ops)
+        const CHUNK = 400;
+        for (let i = 0; i < validEpisodes.length; i += CHUNK) {
+          const chunk = validEpisodes.slice(i, i + CHUNK);
           const batch = db.batch();
-          for (const ep of newEpisodes) {
-            const episode: Episode = {
+          for (const ep of chunk) {
+            const isNew = !existingIds.has(ep.id);
+            if (isNew) newCount++;
+
+            // For new episodes: include user-state defaults
+            // For existing episodes: only update metadata fields (preserve user state)
+            const update: Record<string, unknown> = {
               ...ep,
               podcastId: podcast.id,
-              isInWatchlist: false,
-              isDownloaded: false,
-              playback: { position: 0, completed: false },
+              _updatedAt: FieldValue.serverTimestamp(),
             };
+            if (isNew) {
+              update.isInWatchlist = false;
+              update.isDownloaded = false;
+              update.playback = { position: 0, completed: false };
+            }
             batch.set(
               db.doc(`users/${userId}/episodes/${ep.id}`),
-              { ...episode, _updatedAt: FieldValue.serverTimestamp() },
+              update,
               { merge: true },
             );
           }
           await batch.commit();
-          totalNew += newEpisodes.length;
         }
+        totalNew += newCount;
 
         await podcastDoc.ref.update({
           lastFetchedAt: Date.now(),
-          episodeCount: existingIds.size + newEpisodes.length,
+          episodeCount: validEpisodes.length,
         });
       } catch (err) {
         errors++;

@@ -3,7 +3,7 @@ import { setGlobalOptions } from "firebase-functions/v2";
 setGlobalOptions({ region: "asia-northeast1", maxInstances: 10 });
 
 export { searchPodcasts } from "./search";
-export { subscribePodcast, refreshFeeds } from "./rss";
+export { subscribePodcast, refreshFeeds, refreshMyFeeds } from "./rss";
 export { getEpisodeContext } from "./context";
 export { downloadEpisode } from "./ingest";
 export { transcribeEpisode } from "./transcribe";

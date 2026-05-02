@@ -12,6 +12,11 @@ export const subscribePodcastFn = httpsCallable<
   { podcastId: string; episodeCount: number }
 >(functions, "subscribePodcast");
 
+export const refreshMyFeedsFn = httpsCallable<
+  Record<string, never>,
+  { ok: true; podcasts: number; newEpisodes: number; errors: number }
+>(functions, "refreshMyFeeds");
+
 export const getEpisodeContextFn = httpsCallable<
   { episodeId: string },
   {
