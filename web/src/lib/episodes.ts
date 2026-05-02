@@ -52,6 +52,18 @@ export async function setWatchlist(
   });
 }
 
+export async function listRecentEpisodes(max = 50): Promise<Episode[]> {
+  const uid = requireUid();
+  const snap = await getDocs(
+    query(
+      collection(db, "users", uid, "episodes"),
+      orderBy("publishedAt", "desc"),
+      limit(max),
+    ),
+  );
+  return snap.docs.map((d) => d.data() as Episode);
+}
+
 export async function listWatchlist(max = 100): Promise<Episode[]> {
   const uid = requireUid();
   const snap = await getDocs(

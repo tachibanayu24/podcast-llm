@@ -7,7 +7,9 @@ import {
 } from "@tanstack/react-router";
 import type { User } from "firebase/auth";
 import { AppShell } from "./components/AppShell";
+import { DownloadsPage } from "./pages/DownloadsPage";
 import { EpisodeDetailPage } from "./pages/EpisodeDetailPage";
+import { FeedPage } from "./pages/FeedPage";
 import { HomePage } from "./pages/HomePage";
 import { PodcastDetailPage } from "./pages/PodcastDetailPage";
 import { SearchPage } from "./pages/SearchPage";
@@ -47,6 +49,12 @@ const indexRoute = createRoute({
   component: HomePage,
 });
 
+const feedRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: "/feed",
+  component: FeedPage,
+});
+
 const searchRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: "/search",
@@ -57,6 +65,12 @@ const watchlistRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: "/watchlist",
   component: WatchlistPage,
+});
+
+const downloadsRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: "/downloads",
+  component: DownloadsPage,
 });
 
 const podcastDetailRoute = createRoute({
@@ -81,8 +95,10 @@ const routeTree = rootRoute.addChildren([
   signInRoute,
   protectedRoute.addChildren([
     indexRoute,
+    feedRoute,
     searchRoute,
     watchlistRoute,
+    downloadsRoute,
     podcastDetailRoute,
     episodeDetailRoute,
     settingsRoute,

@@ -1,8 +1,9 @@
 import { Link } from "@tanstack/react-router";
-import { Bookmark, Library, Search, Settings } from "lucide-react";
+import { Bookmark, Library, Search, Settings, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const items = [
+  { to: "/feed" as const, icon: Sparkles, label: "新着", exact: false },
   { to: "/" as const, icon: Library, label: "ライブラリ", exact: true },
   { to: "/search" as const, icon: Search, label: "検索", exact: false },
   { to: "/watchlist" as const, icon: Bookmark, label: "あとで", exact: false },
@@ -12,7 +13,7 @@ const items = [
 export function BottomNav() {
   return (
     <nav className="border-t border-border bg-background/85 backdrop-blur-xl">
-      <ul className="mx-auto max-w-md grid grid-cols-4">
+      <ul className="mx-auto max-w-md grid grid-cols-5">
         {items.map((item) => (
           <li key={item.to}>
             <Link
