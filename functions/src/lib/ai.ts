@@ -5,7 +5,7 @@ const LOCATION = "asia-northeast1";
 
 export const MODELS = {
   fast: "gemini-2.5-flash",
-  smart: "gemini-3-pro-preview",
+  smart: "gemini-2.5-pro",
 } as const;
 
 let vertex: ReturnType<typeof createVertex> | null = null;
