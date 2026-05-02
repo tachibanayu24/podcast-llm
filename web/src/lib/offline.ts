@@ -79,3 +79,24 @@ export async function listOfflineEpisodeIds(): Promise<string[]> {
     .filter((k): k is string => typeof k === "string" && k.startsWith(PREFIX))
     .map((k) => k.slice(PREFIX.length));
 }
+
+export interface OfflineEntry {
+  episodeId: string;
+  size: number;
+}
+
+export async function listOfflineEntries(): Promise<OfflineEntry[]> {
+  const ids = await listOfflineEpisodeIds();
+  const entries = await Promise.all(
+    ids.map(async (episodeId) => {
+      const blob = await get<Blob>(key(episodeId));
+      return { episodeId, size: blob?.size ?? 0 };
+    }),
+  );
+  return entries;
+}
+
+export async function deleteAllOffline(): Promise<void> {
+  const ids = await listOfflineEpisodeIds();
+  await Promise.all(ids.map((id) => deleteOffline(id)));
+}

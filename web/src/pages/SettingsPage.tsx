@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2, LogOut, RefreshCw } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { ChevronRight, Download, Loader2, LogOut, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
@@ -85,6 +86,27 @@ export function SettingsPage() {
         {lastResult && (
           <p className="text-xs text-muted-foreground px-1">{lastResult}</p>
         )}
+      </div>
+
+      <div className="space-y-2">
+        <h2 className="text-sm font-semibold text-muted-foreground px-1">
+          オフライン
+        </h2>
+        <Card className="overflow-hidden">
+          <Link
+            to="/downloads"
+            className="w-full flex items-center gap-3 px-5 py-4 hover:bg-accent transition-colors"
+          >
+            <Download className="size-4" />
+            <div className="flex-1">
+              <div className="font-medium">ダウンロード済みエピソード</div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                オフラインで聴けるエピソードを管理
+              </div>
+            </div>
+            <ChevronRight className="size-4 text-muted-foreground" />
+          </Link>
+        </Card>
       </div>
 
       <div className="space-y-2">
