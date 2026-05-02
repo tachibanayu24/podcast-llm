@@ -3,7 +3,6 @@ import { useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { savePlaybackPosition } from "@/lib/episodes";
 import { usePlayerStore } from "@/lib/player-store";
-import { cn } from "@/lib/utils";
 
 function formatTime(sec: number): string {
   if (!sec || !isFinite(sec)) return "0:00";
@@ -15,16 +14,20 @@ function formatTime(sec: number): string {
 export function Player() {
   const audioRef = useRef<HTMLAudioElement>(null);
   const episode = usePlayerStore((s) => s.episode);
-  const podcastTitle = usePlayerStore((s) => s.podcastTitle);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const position = usePlayerStore((s) => s.position);
   const duration = usePlayerStore((s) => s.duration);
+  const playbackRate = usePlayerStore((s) => s.playbackRate);
+  const podcastTitle = usePlayerStore((s) => s.podcastTitle);
   const play = usePlayerStore((s) => s.play);
   const pause = usePlayerStore((s) => s.pause);
   const toggle = usePlayerStore((s) => s.toggle);
   const seek = usePlayerStore((s) => s.seek);
+  const skipBack = usePlayerStore((s) => s.skipBack);
+  const skipForward = usePlayerStore((s) => s.skipForward);
   const setPosition = usePlayerStore((s) => s.setPosition);
   const setDuration = usePlayerStore((s) => s.setDuration);
+  const expand = usePlayerStore((s) => s.expand);
   const close = usePlayerStore((s) => s.close);
 
   // Sync isPlaying → audio element
@@ -50,7 +53,14 @@ export function Player() {
     }
   }, [position]);
 
-  // Media Session API for lock screen / notification controls
+  // Sync playback rate
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el) return;
+    el.playbackRate = playbackRate;
+  }, [playbackRate]);
+
+  // Media Session API
   useEffect(() => {
     if (!episode || !("mediaSession" in navigator)) return;
 
@@ -64,14 +74,10 @@ export function Player() {
 
     navigator.mediaSession.setActionHandler("play", play);
     navigator.mediaSession.setActionHandler("pause", pause);
-    navigator.mediaSession.setActionHandler("seekbackward", () => {
-      const cur = usePlayerStore.getState().position;
-      seek(Math.max(0, cur - 15));
-    });
-    navigator.mediaSession.setActionHandler("seekforward", () => {
-      const cur = usePlayerStore.getState().position;
-      const dur = usePlayerStore.getState().duration;
-      seek(dur > 0 ? Math.min(dur, cur + 30) : cur + 30);
+    navigator.mediaSession.setActionHandler("seekbackward", () => skipBack());
+    navigator.mediaSession.setActionHandler("seekforward", () => skipForward());
+    navigator.mediaSession.setActionHandler("seekto", (e) => {
+      if (typeof e.seekTime === "number") seek(e.seekTime);
     });
 
     return () => {
@@ -79,10 +85,11 @@ export function Player() {
       navigator.mediaSession.setActionHandler("pause", null);
       navigator.mediaSession.setActionHandler("seekbackward", null);
       navigator.mediaSession.setActionHandler("seekforward", null);
+      navigator.mediaSession.setActionHandler("seekto", null);
     };
-  }, [episode, podcastTitle, play, pause, seek]);
+  }, [episode, podcastTitle, play, pause, seek, skipBack, skipForward]);
 
-  // Periodic position save to Firestore (every 10s while playing)
+  // Periodic position save (every 10s while playing)
   useEffect(() => {
     if (!episode || !isPlaying) return;
     const interval = setInterval(() => {
@@ -92,7 +99,7 @@ export function Player() {
     return () => clearInterval(interval);
   }, [episode?.id, isPlaying]);
 
-  // Save on pause + on close (best-effort)
+  // Best-effort save on unmount / episode change
   useEffect(() => {
     if (!episode) return;
     return () => {
@@ -124,12 +131,7 @@ export function Player() {
         }}
       />
 
-      <div
-        className={cn(
-          "fixed inset-x-0 z-30 px-2 sm:px-4",
-          "bottom-[calc(env(safe-area-inset-bottom)+62px)]",
-        )}
-      >
+      <div className="px-2 sm:px-4 pb-2">
         <div className="mx-auto max-w-md rounded-2xl border border-border bg-card/90 backdrop-blur-xl shadow-2xl shadow-black/40 overflow-hidden">
           <div className="h-0.5 bg-secondary">
             <div
@@ -138,21 +140,28 @@ export function Player() {
             />
           </div>
           <div className="flex items-center gap-3 p-2 pl-3">
-            {episode.artwork && (
-              <img
-                src={episode.artwork}
-                alt=""
-                className="size-10 rounded-lg shrink-0 object-cover"
-              />
-            )}
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium leading-tight truncate">
-                {episode.title}
+            <button
+              type="button"
+              onClick={expand}
+              aria-label="プレイヤーを開く"
+              className="flex-1 flex items-center gap-3 min-w-0 text-left"
+            >
+              {episode.artwork && (
+                <img
+                  src={episode.artwork}
+                  alt=""
+                  className="size-10 rounded-lg shrink-0 object-cover"
+                />
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium leading-tight truncate">
+                  {episode.title}
+                </div>
+                <div className="text-[11px] text-muted-foreground tabular-nums mt-0.5">
+                  {formatTime(position)} / {formatTime(duration)}
+                </div>
               </div>
-              <div className="text-[11px] text-muted-foreground tabular-nums mt-0.5">
-                {formatTime(position)} / {formatTime(duration)}
-              </div>
-            </div>
+            </button>
             <Button
               variant="gradient"
               size="icon"

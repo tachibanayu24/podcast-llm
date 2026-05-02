@@ -1,15 +1,19 @@
 import { Outlet } from "@tanstack/react-router";
 import { BottomNav } from "@/components/BottomNav";
 import { Player } from "@/components/Player";
+import { PlayerSheet } from "@/components/PlayerSheet";
 
 export function AppShell() {
   return (
-    <div className="min-h-dvh flex flex-col">
-      <main className="flex-1 mx-auto w-full max-w-3xl px-4 sm:px-6 py-6 sm:py-8 pb-44">
+    <div className="min-h-dvh">
+      <main className="mx-auto w-full max-w-3xl px-4 sm:px-6 py-6 sm:py-8 pb-44">
         <Outlet />
       </main>
-      <Player />
-      <BottomNav />
+      <div className="fixed inset-x-0 bottom-0 z-40 pb-[env(safe-area-inset-bottom)]">
+        <Player />
+        <BottomNav />
+      </div>
+      <PlayerSheet />
     </div>
   );
 }

@@ -10,13 +10,7 @@ const items = [
 
 export function BottomNav() {
   return (
-    <nav
-      className={cn(
-        "fixed bottom-0 inset-x-0 z-40",
-        "border-t border-border bg-background/85 backdrop-blur-xl",
-        "pb-[env(safe-area-inset-bottom)]",
-      )}
-    >
+    <nav className="border-t border-border bg-background/85 backdrop-blur-xl">
       <ul className="mx-auto max-w-md grid grid-cols-3">
         {items.map((item) => (
           <li key={item.to}>

@@ -122,3 +122,59 @@
   -webkit-background-clip: text;
   color: transparent;
 }
+
+.player-range {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  height: 20px;
+  cursor: pointer;
+}
+
+.player-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    var(--color-primary) 0%,
+    var(--color-pink) var(--progress, 0%),
+    var(--color-secondary) var(--progress, 0%),
+    var(--color-secondary) 100%
+  );
+}
+
+.player-range::-moz-range-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: var(--color-secondary);
+}
+
+.player-range::-moz-range-progress {
+  height: 4px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    var(--color-primary),
+    var(--color-pink)
+  );
+}
+
+.player-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: var(--color-foreground);
+  margin-top: -5px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.player-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: none;
+  border-radius: 9999px;
+  background: var(--color-foreground);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
