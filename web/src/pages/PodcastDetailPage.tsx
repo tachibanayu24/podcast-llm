@@ -1,13 +1,20 @@
-import { useQuery } from "@tanstack/react-query";
-import { Link, useParams } from "@tanstack/react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, useNavigate, useParams } from "@tanstack/react-router";
+import { ListPlus, Loader2, Play, Trash2 } from "lucide-react";
 import { EpisodeRow } from "@/components/EpisodeRow";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { friendlyError } from "@/lib/errors";
+import { unsubscribePodcastFn } from "@/lib/functions";
 import { getPodcast, listEpisodes } from "@/lib/podcasts";
+import { usePlayerStore } from "@/lib/player-store";
 
 export function PodcastDetailPage() {
   const { id } = useParams({ from: "/_app/podcast/$id" });
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const podcastQuery = useQuery({
     queryKey: ["podcast", id],
@@ -21,6 +28,15 @@ export function PodcastDetailPage() {
 
   const podcast = podcastQuery.data;
   const episodes = episodesQuery.data;
+  const playSequence = usePlayerStore((s) => s.playSequence);
+
+  const unsubscribe = useMutation({
+    mutationFn: () => unsubscribePodcastFn({ podcastId: id }).then((r) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["subscriptions"] });
+      navigate({ to: "/" });
+    },
+  });
 
   return (
     <div className="space-y-10">
@@ -69,18 +85,79 @@ export function PodcastDetailPage() {
                   {podcast.description}
                 </p>
               )}
+              <div className="pt-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={unsubscribe.isPending}
+                  onClick={() => {
+                    if (
+                      confirm(
+                        `「${podcast.title}」の購読を解除しますか?\n\nエピソード・要約・文字起こしも削除されます。`,
+                      )
+                    ) {
+                      unsubscribe.mutate();
+                    }
+                  }}
+                  className="gap-1.5 text-muted-foreground hover:text-destructive h-8"
+                >
+                  {unsubscribe.isPending ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="size-3.5" />
+                  )}
+                  購読解除
+                </Button>
+                {unsubscribe.isError && (
+                  <p className="text-xs text-destructive mt-1">
+                    {friendlyError(unsubscribe.error)}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         </header>
       )}
 
       <section className="space-y-3">
-        <h2 className="text-xl font-bold tracking-tight">エピソード</h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-xl font-bold tracking-tight">エピソード</h2>
+          {episodes && episodes.length > 1 && (
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  const oldFirst = [...episodes].reverse();
+                  playSequence(oldFirst, podcast?.title);
+                }}
+                className="gap-1.5"
+              >
+                <Play className="size-3.5 fill-current" />
+                古い順に再生
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => playSequence(episodes, podcast?.title)}
+                className="gap-1.5"
+                title="新しい順にキュー再生"
+              >
+                <ListPlus className="size-3.5" />
+                新着から
+              </Button>
+            </div>
+          )}
+        </div>
 
         {episodesQuery.isLoading && <EpisodeListSkeleton />}
 
         {episodes && episodes.length === 0 && (
-          <p className="text-sm text-muted-foreground">エピソードがありません</p>
+          <Card className="p-6 text-center text-sm text-muted-foreground">
+            エピソードがまだ取得できていません。
+            <br />
+            設定ページから「フィードを再取得」してみてください。
+          </Card>
         )}
 
         {episodes && episodes.length > 0 && (

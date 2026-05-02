@@ -129,6 +129,10 @@ export function Player() {
     navigator.mediaSession.setActionHandler("seekto", (e) => {
       if (typeof e.seekTime === "number") seek(e.seekTime);
     });
+    navigator.mediaSession.setActionHandler("nexttrack", () => {
+      const hasQueue = usePlayerStore.getState().queue.length > 0;
+      if (hasQueue) usePlayerStore.getState().playNext();
+    });
 
     return () => {
       navigator.mediaSession.setActionHandler("play", null);
@@ -136,6 +140,7 @@ export function Player() {
       navigator.mediaSession.setActionHandler("seekbackward", null);
       navigator.mediaSession.setActionHandler("seekforward", null);
       navigator.mediaSession.setActionHandler("seekto", null);
+      navigator.mediaSession.setActionHandler("nexttrack", null);
     };
   }, [episode, podcastTitle, play, pause, seek, skipBack, skipForward]);
 
@@ -195,9 +200,14 @@ export function Player() {
         onPause={() => pause()}
         onEnded={() => {
           savePlaybackPosition(episode.id, duration, true).catch(() => {});
-          // Stop but keep episode loaded so user can replay
-          pause();
-          seek(0);
+          const hasQueue = usePlayerStore.getState().queue.length > 0;
+          if (hasQueue) {
+            usePlayerStore.getState().playNext();
+          } else {
+            // Stop but keep episode loaded so user can replay
+            pause();
+            seek(0);
+          }
         }}
         onError={() => {
           if (resolvedSrc?.startsWith("blob:") && !blobFailed) {

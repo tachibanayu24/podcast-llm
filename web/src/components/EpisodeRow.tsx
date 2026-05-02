@@ -1,10 +1,10 @@
 import { Link } from "@tanstack/react-router";
-import { Bookmark, Pause, Play } from "lucide-react";
+import { Bookmark, Check, Pause, Play } from "lucide-react";
 import type { Episode, Podcast } from "@podcast-llm/shared";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useWatchlistToggle } from "@/hooks/useWatchlistToggle";
-import { formatDate, formatDuration } from "@/lib/format";
+import { formatDate, formatDuration, formatTimestamp } from "@/lib/format";
 import { usePlayerStore } from "@/lib/player-store";
 import { cn } from "@/lib/utils";
 
@@ -34,8 +34,30 @@ export function EpisodeRow({
     else load(episode, { podcastTitle: podcast?.title });
   }
 
+  const playback = episode.playback;
+  const completed = !!playback?.completed;
+  const inProgress =
+    !completed &&
+    !!playback?.position &&
+    playback.position > 30 && // ignore tiny tap/seek noise
+    !!episode.duration &&
+    playback.position < episode.duration - 30;
+  const progressPercent =
+    inProgress && episode.duration
+      ? Math.min(100, (playback.position / episode.duration) * 100)
+      : 0;
+  const remainingSec =
+    inProgress && episode.duration
+      ? Math.max(0, episode.duration - playback.position)
+      : 0;
+
   return (
-    <Card className="p-4 hover:border-primary/40 transition-all duration-200 group">
+    <Card
+      className={cn(
+        "p-4 hover:border-primary/40 transition-all duration-200 group overflow-hidden",
+        completed && "opacity-70",
+      )}
+    >
       <div className="flex items-start gap-3">
         {showPodcast && podcast?.artwork && (
           <Link
@@ -72,9 +94,22 @@ export function EpisodeRow({
             {episode.duration ? (
               <>
                 <span className="opacity-50">·</span>
-                <span>{formatDuration(episode.duration)}</span>
+                <span>
+                  {inProgress
+                    ? `残り${formatTimestamp(remainingSec)}`
+                    : formatDuration(episode.duration)}
+                </span>
               </>
             ) : null}
+            {completed && (
+              <>
+                <span className="opacity-50">·</span>
+                <span className="inline-flex items-center gap-0.5 text-primary">
+                  <Check className="size-3" />
+                  再生済み
+                </span>
+              </>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
@@ -109,6 +144,17 @@ export function EpisodeRow({
           </Button>
         </div>
       </div>
+      {inProgress && (
+        <div
+          className="mt-3 -mx-4 -mb-4 h-0.5 bg-secondary/40"
+          aria-hidden="true"
+        >
+          <div
+            className="h-full brand-gradient"
+            style={{ width: `${progressPercent}%` }}
+          />
+        </div>
+      )}
     </Card>
   );
 }

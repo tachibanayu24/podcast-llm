@@ -1,13 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Bookmark } from "lucide-react";
+import { Bookmark, Play } from "lucide-react";
 import { useMemo } from "react";
 import type { Podcast } from "@podcast-llm/shared";
 import { EpisodeRow } from "@/components/EpisodeRow";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { listWatchlist } from "@/lib/episodes";
 import { listSubscriptions } from "@/lib/podcasts";
+import { usePlayerStore } from "@/lib/player-store";
 
 export function WatchlistPage() {
   const watchlistQuery = useQuery({
@@ -27,14 +29,28 @@ export function WatchlistPage() {
   }, [podcastsQuery.data]);
 
   const episodes = watchlistQuery.data;
+  const playSequence = usePlayerStore((s) => s.playSequence);
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold tracking-tight">あとで聴く</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          気になったエピソードをここに集めて、好きなときに聴く。
-        </p>
+      <header className="flex items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">あとで聴く</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            気になったエピソードをここに集めて、好きなときに聴く。
+          </p>
+        </div>
+        {episodes && episodes.length > 1 && (
+          <Button
+            size="sm"
+            variant="gradient"
+            onClick={() => playSequence(episodes)}
+            className="gap-1.5 shrink-0"
+          >
+            <Play className="size-3.5 fill-current" />
+            順に再生
+          </Button>
+        )}
       </header>
 
       {watchlistQuery.isLoading && <ListSkeleton />}

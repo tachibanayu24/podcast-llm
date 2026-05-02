@@ -20,6 +20,7 @@ interface PlayerState {
   duration: number;
   isExpanded: boolean;
   playbackRate: number;
+  queue: Episode[];
 
   /** Pending seek to apply once audio metadata is loaded. */
   pendingSeek: number | null;
@@ -30,6 +31,16 @@ interface PlayerState {
 
   load: (episode: Episode, options?: LoadOptions) => void;
   loadAndSeek: (episode: Episode, sec: number, podcastTitle?: string) => void;
+  /** Replace queue and start playback of first item. */
+  playSequence: (episodes: Episode[], podcastTitle?: string) => void;
+  /** Add to end of queue. */
+  enqueue: (episode: Episode) => void;
+  /** Remove from queue. */
+  dequeue: (episodeId: string) => void;
+  clearQueue: () => void;
+  /** Advance to next queued episode, or close if none. */
+  playNext: () => void;
+
   play: () => void;
   pause: () => void;
   toggle: () => void;
@@ -63,6 +74,7 @@ export const usePlayerStore = create<PlayerState>()(
       duration: 0,
       isExpanded: false,
       playbackRate: 1,
+      queue: [],
       pendingSeek: null,
       error: null,
       loadVersion: 0,
@@ -95,6 +107,38 @@ export const usePlayerStore = create<PlayerState>()(
 
       loadAndSeek: (episode, sec, podcastTitle) => {
         get().load(episode, { podcastTitle, startAt: sec });
+      },
+
+      playSequence: (episodes, podcastTitle) => {
+        if (episodes.length === 0) return;
+        const [first, ...rest] = episodes;
+        get().load(first!, { podcastTitle });
+        set({ queue: rest });
+      },
+
+      enqueue: (episode) => {
+        set((s) => ({
+          queue: s.queue.some((e) => e.id === episode.id)
+            ? s.queue
+            : [...s.queue, episode],
+        }));
+      },
+
+      dequeue: (episodeId) => {
+        set((s) => ({ queue: s.queue.filter((e) => e.id !== episodeId) }));
+      },
+
+      clearQueue: () => set({ queue: [] }),
+
+      playNext: () => {
+        const { queue, podcastTitle } = get();
+        if (queue.length === 0) {
+          get().close();
+          return;
+        }
+        const [next, ...rest] = queue;
+        get().load(next!, { podcastTitle: podcastTitle ?? undefined });
+        set({ queue: rest });
       },
 
       play: () => set({ isPlaying: true, error: null }),
@@ -141,6 +185,7 @@ export const usePlayerStore = create<PlayerState>()(
           isExpanded: false,
           pendingSeek: null,
           error: null,
+          queue: [],
         }),
     }),
     {

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { auth } from "@/lib/firebase";
 
 export interface ChatMessage {
@@ -16,11 +16,59 @@ interface UseEpisodeChatResult {
   reset: () => void;
 }
 
+const STORAGE_PREFIX = "podcast-llm.chat:";
+
+function storageKey(episodeId: string): string {
+  return `${STORAGE_PREFIX}${episodeId}`;
+}
+
+function loadFromSession(episodeId: string): ChatMessage[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = sessionStorage.getItem(storageKey(episodeId));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed as ChatMessage[];
+  } catch {
+    return [];
+  }
+}
+
+function saveToSession(episodeId: string, messages: ChatMessage[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem(storageKey(episodeId), JSON.stringify(messages));
+  } catch {
+    // ignore quota/serialization errors
+  }
+}
+
 export function useEpisodeChat(episodeId: string): UseEpisodeChatResult {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>(() =>
+    loadFromSession(episodeId),
+  );
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  // Reload when episode changes (mounted under different episode)
+  useEffect(() => {
+    setMessages(loadFromSession(episodeId));
+    setError(null);
+    setIsStreaming(false);
+    abortRef.current?.abort();
+    abortRef.current = null;
+  }, [episodeId]);
+
+  // Persist on every change (only meaningful messages)
+  useEffect(() => {
+    if (messages.length === 0) {
+      sessionStorage.removeItem(storageKey(episodeId));
+    } else {
+      saveToSession(episodeId, messages);
+    }
+  }, [episodeId, messages]);
 
   const reset = useCallback(() => {
     abortRef.current?.abort();
@@ -28,7 +76,8 @@ export function useEpisodeChat(episodeId: string): UseEpisodeChatResult {
     setMessages([]);
     setError(null);
     setIsStreaming(false);
-  }, []);
+    sessionStorage.removeItem(storageKey(episodeId));
+  }, [episodeId]);
 
   const stop = useCallback(() => {
     abortRef.current?.abort();
@@ -55,12 +104,12 @@ export function useEpisodeChat(episodeId: string): UseEpisodeChatResult {
         content: trimmed,
       };
       const assistantId = crypto.randomUUID();
-      const history = [...messages, userMsg];
 
-      setMessages([
-        ...history,
-        { id: assistantId, role: "assistant", content: "" },
-      ]);
+      let history: ChatMessage[] = [];
+      setMessages((prev) => {
+        history = [...prev, userMsg];
+        return [...history, { id: assistantId, role: "assistant", content: "" }];
+      });
       setIsStreaming(true);
 
       const ctrl = new AbortController();
@@ -108,7 +157,7 @@ export function useEpisodeChat(episodeId: string): UseEpisodeChatResult {
         abortRef.current = null;
       }
     },
-    [episodeId, messages, isStreaming],
+    [episodeId, isStreaming],
   );
 
   return { messages, send, stop, isStreaming, error, reset };

@@ -17,6 +17,11 @@ export const refreshMyFeedsFn = httpsCallable<
   { ok: true; podcasts: number; newEpisodes: number; errors: number }
 >(functions, "refreshMyFeeds");
 
+export const unsubscribePodcastFn = httpsCallable<
+  { podcastId: string },
+  { ok: true; deletedEpisodes: number }
+>(functions, "unsubscribePodcast");
+
 export const getEpisodeContextFn = httpsCallable<
   { episodeId: string },
   {

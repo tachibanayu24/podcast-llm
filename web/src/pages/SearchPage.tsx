@@ -1,18 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Plus, Search } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { Check, Plus, Search, SearchX } from "lucide-react";
+import { type FormEvent, type KeyboardEvent, useRef, useState } from "react";
 import type { SearchResult } from "@podcast-llm/shared";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { friendlyError } from "@/lib/errors";
 import { searchPodcastsFn } from "@/lib/functions";
 import { subscribeFromSearch } from "@/lib/podcasts";
 
 export function SearchPage() {
   const [term, setTerm] = useState("");
   const [submitted, setSubmitted] = useState("");
+  const composingRef = useRef(false);
 
   const { data, isFetching, error } = useQuery({
     queryKey: ["search", submitted],
@@ -25,7 +27,17 @@ export function SearchPage() {
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
-    setSubmitted(term.trim());
+    if (composingRef.current) return; // ignore IME composition commit
+    const next = term.trim();
+    if (!next) return;
+    setSubmitted(next);
+  }
+
+  function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    // Some IMEs leave isComposing true on Enter; double-guard
+    if (e.key === "Enter" && (e.nativeEvent.isComposing || composingRef.current)) {
+      e.preventDefault();
+    }
   }
 
   return (
@@ -43,6 +55,13 @@ export function SearchPage() {
           type="search"
           value={term}
           onChange={(e) => setTerm(e.target.value)}
+          onCompositionStart={() => {
+            composingRef.current = true;
+          }}
+          onCompositionEnd={() => {
+            composingRef.current = false;
+          }}
+          onKeyDown={onKeyDown}
           placeholder="例: コテンラジオ、Rebuild"
           className="pl-11 h-12 text-base"
         />
@@ -51,13 +70,17 @@ export function SearchPage() {
       {isFetching && <ResultListSkeleton />}
 
       {error && (
-        <p className="text-sm text-destructive">
-          {error instanceof Error ? error.message : "検索に失敗しました"}
-        </p>
+        <p className="text-sm text-destructive">{friendlyError(error)}</p>
       )}
 
       {data && data.length === 0 && submitted && !isFetching && (
-        <p className="text-sm text-muted-foreground">該当なし</p>
+        <Card className="p-8 text-center space-y-2">
+          <SearchX className="size-6 text-muted-foreground mx-auto" />
+          <p className="text-sm font-medium">「{submitted}」に合致する番組なし</p>
+          <p className="text-xs text-muted-foreground">
+            別のキーワードで試してみてください。
+          </p>
+        </Card>
       )}
 
       {data && data.length > 0 && (

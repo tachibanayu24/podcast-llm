@@ -5,6 +5,7 @@ import {
   Pause,
   Play,
   RotateCcw,
+  SkipForward,
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -27,6 +28,7 @@ export function PlayerSheet() {
     duration,
     playbackRate,
     error,
+    queue,
   } = usePlayerStore(
     useShallow((s) => ({
       isExpanded: s.isExpanded,
@@ -37,6 +39,7 @@ export function PlayerSheet() {
       duration: s.duration,
       playbackRate: s.playbackRate,
       error: s.error,
+      queue: s.queue,
     })),
   );
   const toggle = usePlayerStore((s) => s.toggle);
@@ -47,6 +50,7 @@ export function PlayerSheet() {
   const collapse = usePlayerStore((s) => s.collapse);
   const close = usePlayerStore((s) => s.close);
   const retry = usePlayerStore((s) => s.retry);
+  const playNext = usePlayerStore((s) => s.playNext);
 
   // Scrubbing: keep local state during drag, commit on release
   const [scrubValue, setScrubValue] = useState<number | null>(null);
@@ -252,6 +256,21 @@ export function PlayerSheet() {
             </div>
           </Button>
         </div>
+
+        {queue.length > 0 && (
+          <button
+            type="button"
+            onClick={playNext}
+            className="mt-3 flex items-center gap-2 mx-auto text-xs text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-full bg-secondary/50"
+          >
+            <SkipForward className="size-3.5" />
+            <span>次へ</span>
+            <span className="opacity-60 truncate max-w-[180px]">
+              {queue[0]!.title}
+            </span>
+            <span className="text-[10px] opacity-60">+{queue.length}</span>
+          </button>
+        )}
 
         {/* Bottom row: watchlist + speed */}
         <div className="mt-6 grid grid-cols-3 items-center">
