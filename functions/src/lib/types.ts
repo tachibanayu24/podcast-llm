@@ -48,6 +48,7 @@ export interface Chapter {
 
 export interface ShowNotes {
   text: string;
+  html?: string;
   links: { url: string; title: string }[];
 }
 

@@ -2,16 +2,19 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
 import {
   Bookmark,
+  CheckCircle2,
   ChevronLeft,
-  ExternalLink,
+  Download,
   Languages,
   ListMusic,
+  Loader2,
   MessageSquare,
   Pause,
   Play,
   Send,
   Sparkles,
   StickyNote,
+  X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { Chapter, Episode, TranscriptDoc } from "@podcast-llm/shared";
@@ -19,7 +22,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SanitizedHtml } from "@/components/SanitizedHtml";
 import { useEpisodeChat } from "@/hooks/useEpisodeChat";
+import { useEpisodeDownload } from "@/hooks/useEpisodeDownload";
 import { useWatchlistToggle } from "@/hooks/useWatchlistToggle";
 import {
   getEpisode,
@@ -171,11 +176,17 @@ function Hero({
   const showPause = isCurrent && isPlaying;
 
   const watchlistMutation = useWatchlistToggle(episode);
+  const dl = useEpisodeDownload(episode.id, episode.audioUrl);
 
   function handlePlay() {
     if (isCurrent) toggle();
     else load(episode, podcast?.title);
   }
+
+  const dlPercent =
+    dl.progress && dl.progress.total > 0
+      ? Math.round((dl.progress.loaded / dl.progress.total) * 100)
+      : null;
 
   return (
     <header className="relative -mx-4 sm:-mx-6 -mt-6 sm:-mt-8 px-4 sm:px-6 pt-8 pb-2 overflow-hidden">
@@ -261,7 +272,48 @@ function Hero({
                 )}
               />
             </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                if (dl.isDownloading) dl.cancel();
+                else if (dl.isDownloaded) dl.remove();
+                else dl.download();
+              }}
+              aria-label={
+                dl.isDownloaded
+                  ? "オフラインから削除"
+                  : dl.isDownloading
+                    ? "ダウンロード中止"
+                    : "オフライン保存"
+              }
+              className="size-11"
+            >
+              {dl.isDownloading ? (
+                <X className="size-5 text-muted-foreground" />
+              ) : dl.isDownloaded ? (
+                <CheckCircle2 className="size-5 text-primary fill-primary/20" />
+              ) : (
+                <Download className="size-5 text-muted-foreground" />
+              )}
+            </Button>
           </div>
+          {(dl.isDownloading || dl.error) && (
+            <div className="text-xs">
+              {dl.isDownloading && (
+                <span className="text-muted-foreground inline-flex items-center gap-2">
+                  <Loader2 className="size-3 animate-spin" />
+                  ダウンロード中
+                  {dlPercent != null ? ` ${dlPercent}%` : "…"}
+                </span>
+              )}
+              {dl.error && (
+                <span className="text-destructive">
+                  失敗: {dl.error.message}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </header>
@@ -512,38 +564,19 @@ function ChapterSourceBadge({
 
 function ShowNotesSection({ episode }: { episode: Episode }) {
   if (!episode.showNotes && !episode.description) return null;
-  const text = episode.showNotes?.text ?? episode.description ?? "";
-  const links = episode.showNotes?.links ?? [];
+  const html = episode.showNotes?.html ?? episode.description ?? "";
+  const text = episode.showNotes?.text ?? "";
+  const hasHtml = /<[a-z][\s\S]*>/i.test(html);
 
   return (
     <Section title="エピソードについて">
-      <Card className="p-5 space-y-4">
-        {text && (
+      <Card className="p-5">
+        {hasHtml ? (
+          <SanitizedHtml html={html} className="prose-podcast" />
+        ) : (
           <p className="text-sm leading-relaxed whitespace-pre-line text-foreground/90">
-            {text}
+            {text || html}
           </p>
-        )}
-        {links.length > 0 && (
-          <div className="space-y-1.5">
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              リンク
-            </h3>
-            <ul className="space-y-1">
-              {links.map((l) => (
-                <li key={l.url}>
-                  <a
-                    href={l.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm text-primary hover:underline inline-flex items-center gap-1.5"
-                  >
-                    <ExternalLink className="size-3 shrink-0" />
-                    <span className="line-clamp-1">{l.title}</span>
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
         )}
       </Card>
     </Section>

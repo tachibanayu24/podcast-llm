@@ -20,6 +20,7 @@
     "ai": "6.0.174",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "dompurify": "3.4.2",
     "firebase": "^12.12.1",
     "idb-keyval": "^6.2.2",
     "lucide-react": "^1.14.0",

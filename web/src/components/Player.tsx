@@ -1,7 +1,8 @@
 import { Pause, Play, X } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { savePlaybackPosition } from "@/lib/episodes";
+import { getOfflineAudioBlob } from "@/lib/offline";
 import { usePlayerStore } from "@/lib/player-store";
 
 function formatTime(sec: number): string {
@@ -29,6 +30,36 @@ export function Player() {
   const setDuration = usePlayerStore((s) => s.setDuration);
   const expand = usePlayerStore((s) => s.expand);
   const close = usePlayerStore((s) => s.close);
+
+  const [resolvedSrc, setResolvedSrc] = useState<string | null>(null);
+
+  // Prefer offline blob if downloaded, fall back to remote audioUrl
+  useEffect(() => {
+    if (!episode) {
+      setResolvedSrc(null);
+      return;
+    }
+    let cancelled = false;
+    let blobUrl: string | null = null;
+    (async () => {
+      try {
+        const blob = await getOfflineAudioBlob(episode.id);
+        if (cancelled) return;
+        if (blob) {
+          blobUrl = URL.createObjectURL(blob);
+          setResolvedSrc(blobUrl);
+        } else {
+          setResolvedSrc(episode.audioUrl);
+        }
+      } catch {
+        if (!cancelled) setResolvedSrc(episode.audioUrl);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
+  }, [episode?.id, episode?.audioUrl]);
 
   // Sync isPlaying → audio element
   useEffect(() => {
@@ -116,7 +147,7 @@ export function Player() {
     <>
       <audio
         ref={audioRef}
-        src={episode.audioUrl}
+        src={resolvedSrc ?? undefined}
         preload="auto"
         onTimeUpdate={(e) => setPosition(e.currentTarget.currentTime)}
         onDurationChange={(e) => {

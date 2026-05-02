@@ -244,7 +244,7 @@ function extractChaptersFromShowNotes(html: string): Chapter[] {
 function parseShowNotes(html: string): ShowNotes {
   const text = stripHtml(html).trim();
   const links = extractLinks(html);
-  return { text, links };
+  return { text, html, links };
 }
 
 const A_TAG_RE = /<a\b[^>]*\bhref=(?:"([^"]+)"|'([^']+)'|([^\s>]+))[^>]*>([\s\S]*?)<\/a>/gi;

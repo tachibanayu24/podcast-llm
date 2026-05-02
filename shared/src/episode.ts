@@ -31,7 +31,8 @@ export interface Chapter {
 }
 
 export interface ShowNotes {
-  text: string; // plain text body (HTML stripped)
+  text: string; // plain text body (HTML stripped) — for LLM context
+  html?: string; // original HTML — for rendering
   links: { url: string; title: string }[];
 }
 
