@@ -4,6 +4,7 @@ import { logger } from "firebase-functions/v2";
 import { getAuth } from "firebase-admin/auth";
 import { db } from "./lib/admin.js";
 import { getVertex, MODELS } from "./lib/ai.js";
+import { formatTs } from "./lib/format.js";
 import type { Episode, SummaryDoc, TranscriptDoc } from "./lib/types.js";
 
 interface ChatMessage {
@@ -42,12 +43,35 @@ export const chatWithEpisode = onRequest(
       return;
     }
 
-    const { episodeId, messages, useSearch } = req.body as {
+    // Body may arrive as parsed object, Buffer, or string depending on the
+    // hosting rewrite path. Normalize before validation.
+    let parsed: {
       episodeId?: string;
       messages?: ChatMessage[];
       useSearch?: boolean;
-    };
+    } = {};
+    try {
+      if (req.body && typeof req.body === "object" && !Buffer.isBuffer(req.body)) {
+        parsed = req.body as typeof parsed;
+      } else if (typeof req.body === "string" && req.body.length > 0) {
+        parsed = JSON.parse(req.body);
+      } else if (req.rawBody && req.rawBody.length > 0) {
+        parsed = JSON.parse(req.rawBody.toString("utf-8"));
+      }
+    } catch (e) {
+      logger.warn("chatWithEpisode: body parse failed", e);
+    }
+    const { episodeId, messages, useSearch } = parsed;
     if (!episodeId || !Array.isArray(messages) || messages.length === 0) {
+      logger.warn("chatWithEpisode: invalid payload", {
+        bodyType: typeof req.body,
+        hasRaw: !!req.rawBody,
+        contentType: req.get("content-type"),
+        episodeIdType: typeof episodeId,
+        messagesType: Array.isArray(messages)
+          ? `array(${messages.length})`
+          : typeof messages,
+      });
       res.status(400).send("episodeId and messages required");
       return;
     }
@@ -152,13 +176,4 @@ function buildSystemPrompt(
   }
 
   return parts.join("\n");
-}
-
-function formatTs(sec: number): string {
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  const s = Math.floor(sec % 60);
-  if (h > 0)
-    return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-  return `${m}:${s.toString().padStart(2, "0")}`;
 }
