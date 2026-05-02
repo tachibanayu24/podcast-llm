@@ -8,6 +8,7 @@ import {
 import { AppShell } from "./components/AppShell";
 import { waitForAuth } from "./lib/auth";
 import { HomePage } from "./pages/HomePage";
+import { SearchPage } from "./pages/SearchPage";
 import { SignInPage } from "./pages/SignInPage";
 
 const rootRoute = createRootRoute({
@@ -40,9 +41,15 @@ const indexRoute = createRoute({
   component: HomePage,
 });
 
+const searchRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: "/search",
+  component: SearchPage,
+});
+
 const routeTree = rootRoute.addChildren([
   signInRoute,
-  protectedRoute.addChildren([indexRoute]),
+  protectedRoute.addChildren([indexRoute, searchRoute]),
 ]);
 
 export const router = createRouter({ routeTree });
