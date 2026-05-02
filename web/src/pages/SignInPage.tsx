@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { GoogleIcon } from "../components/icons/GoogleIcon";
 import { signInWithGoogle } from "../lib/auth";
 
 export function SignInPage() {
@@ -18,20 +19,32 @@ export function SignInPage() {
 
   return (
     <main className="min-h-dvh grid place-items-center p-6">
-      <div className="text-center space-y-8 max-w-sm">
-        <div className="space-y-2">
-          <h1 className="text-3xl font-bold">Podcast LLM</h1>
-          <p className="text-sm text-neutral-400">個人用ポッドキャストクライアント</p>
+      <div className="w-full max-w-sm space-y-10">
+        <div className="space-y-3 text-center">
+          <h1 className="text-4xl font-bold tracking-tight leading-tight">
+            AIで聴く、
+            <br />
+            あたらしいPodcast
+          </h1>
+          <p className="text-sm text-neutral-400">
+            要約・文字起こし・対話で、エピソードを深く理解する。
+          </p>
         </div>
-        <button
-          type="button"
-          onClick={handleSignIn}
-          disabled={busy}
-          className="w-full px-6 py-3 bg-white text-neutral-900 rounded-lg font-medium hover:bg-neutral-200 transition disabled:opacity-50"
-        >
-          {busy ? "サインイン中..." : "Googleでサインイン"}
-        </button>
-        {error && <p className="text-sm text-red-400">{error}</p>}
+
+        <div className="space-y-3">
+          <button
+            type="button"
+            onClick={handleSignIn}
+            disabled={busy}
+            className="w-full h-12 bg-white hover:bg-neutral-100 text-neutral-900 rounded-full font-medium transition flex items-center justify-center gap-3 disabled:opacity-60 shadow-sm"
+          >
+            <GoogleIcon />
+            <span>{busy ? "サインイン中..." : "Googleでログイン"}</span>
+          </button>
+          {error && (
+            <p className="text-sm text-red-400 text-center">{error}</p>
+          )}
+        </div>
       </div>
     </main>
   );
