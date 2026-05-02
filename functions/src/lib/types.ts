@@ -23,6 +23,9 @@ export interface Podcast {
 
 export type ArtifactStatus = "none" | "pending" | "done" | "failed";
 
+export type ChapterSource = "psc" | "podcast20" | "shownotes" | "gemini";
+export type TranscriptSource = "rss" | "gemini";
+
 export interface PlaybackState {
   position: number;
   completed: boolean;
@@ -39,8 +42,35 @@ export interface ArtifactMeta {
 
 export interface Chapter {
   start: number;
-  end: number;
+  end?: number;
   title: string;
+}
+
+export interface ShowNotes {
+  text: string;
+  links: { url: string; title: string }[];
+}
+
+export interface TranscriptSourceRef {
+  url: string;
+  type: string;
+  language?: string;
+}
+
+export interface TranscriptSegment {
+  start: number;
+  end?: number;
+  speaker?: string;
+  text: string;
+}
+
+export interface TranscriptDoc {
+  episodeId: string;
+  source: TranscriptSource;
+  language?: string;
+  text: string;
+  segments?: TranscriptSegment[];
+  generatedAt: number;
 }
 
 export interface Episode {
@@ -60,9 +90,16 @@ export interface Episode {
 
   playback: PlaybackState;
 
-  transcript?: ArtifactMeta;
-  summary?: ArtifactMeta;
   chapters?: Chapter[];
+  chaptersSource?: ChapterSource;
+  chaptersUrl?: string;
+
+  transcriptSources?: TranscriptSourceRef[];
+  transcript?: ArtifactMeta & { source?: TranscriptSource };
+
+  summary?: ArtifactMeta;
+
+  showNotes?: ShowNotes;
 
   gcsUri?: string;
   gcsExpiresAt?: number;

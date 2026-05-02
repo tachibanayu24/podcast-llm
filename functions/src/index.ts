@@ -4,6 +4,7 @@ setGlobalOptions({ region: "asia-northeast1", maxInstances: 10 });
 
 export { searchPodcasts } from "./search";
 export { subscribePodcast, refreshFeeds } from "./rss";
+export { getEpisodeContext } from "./context";
 export { downloadEpisode } from "./ingest";
 export { transcribeEpisode } from "./transcribe";
 export { summarizeEpisode } from "./summarize";

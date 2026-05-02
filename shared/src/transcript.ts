@@ -1,14 +1,17 @@
+import type { TranscriptSource } from "./episode.js";
+
 export interface TranscriptSegment {
-  start: number;
-  end: number;
-  text: string;
+  start: number; // seconds
+  end?: number;
   speaker?: string;
+  text: string;
 }
 
-export interface Transcript {
+export interface TranscriptDoc {
+  episodeId: string;
+  source: TranscriptSource;
+  language?: string;
   text: string;
-  segments: TranscriptSegment[];
-  language: string;
-  model: string;
+  segments?: TranscriptSegment[];
   generatedAt: number;
 }
