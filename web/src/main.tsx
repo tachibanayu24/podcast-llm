@@ -1,8 +1,7 @@
-import { StrictMode, useEffect, useRef } from "react";
+import { StrictMode, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider } from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { User } from "firebase/auth";
 import { auth } from "./lib/firebase";
 import { useAuth } from "./hooks/useAuth";
 import { router } from "./router";
@@ -22,15 +21,11 @@ await auth.authStateReady();
 
 function InnerApp() {
   const user = useAuth();
-  const prevUser = useRef<User | null>(user);
 
   useEffect(() => {
-    const wasUser = prevUser.current;
-    prevUser.current = user;
-    if (wasUser?.uid === user?.uid) return;
-    if (wasUser && !user) queryClient.clear();
     router.invalidate();
-  }, [user]);
+    if (!user) queryClient.clear();
+  }, [user?.uid]);
 
   return <RouterProvider router={router} context={{ user }} />;
 }

@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
+import { formatDate, formatDuration } from "../lib/format";
 import { getPodcast, listEpisodes } from "../lib/podcasts";
 
 export function PodcastDetailPage() {
@@ -78,14 +79,3 @@ export function PodcastDetailPage() {
   );
 }
 
-function formatDate(ms: number): string {
-  if (!ms) return "";
-  return new Date(ms).toLocaleDateString("ja-JP");
-}
-
-function formatDuration(sec: number): string {
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  if (h > 0) return `${h}時間${m}分`;
-  return `${m}分`;
-}

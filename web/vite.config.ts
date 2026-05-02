@@ -17,7 +17,7 @@ export default defineConfig({
       manifest: {
         name: "Podcast LLM",
         short_name: "Podcast",
-        description: "個人用Podcastクライアント",
+        description: "AIで聴く、あたらしいPodcast",
         theme_color: "#0a0a0a",
         background_color: "#0a0a0a",
         display: "standalone",
