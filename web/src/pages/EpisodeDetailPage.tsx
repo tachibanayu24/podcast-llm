@@ -4,21 +4,36 @@ import {
   Bookmark,
   ChevronLeft,
   ExternalLink,
+  Languages,
   ListMusic,
+  MessageSquare,
   Pause,
   Play,
+  Send,
   Sparkles,
+  StickyNote,
 } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Chapter, Episode, TranscriptDoc } from "@podcast-llm/shared";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useEpisodeChat } from "@/hooks/useEpisodeChat";
 import { useWatchlistToggle } from "@/hooks/useWatchlistToggle";
-import { getEpisode, getTranscript } from "@/lib/episodes";
+import {
+  getEpisode,
+  getSummary,
+  getTranscript,
+  getTranslation,
+} from "@/lib/episodes";
 import { formatDate, formatDuration, formatTimestamp } from "@/lib/format";
-import { getEpisodeContextFn } from "@/lib/functions";
+import {
+  getEpisodeContextFn,
+  summarizeEpisodeFn,
+  transcribeEpisodeFn,
+  translateSummaryFn,
+} from "@/lib/functions";
 import { getPodcast } from "@/lib/podcasts";
 import { usePlayerStore } from "@/lib/player-store";
 import { cn } from "@/lib/utils";
@@ -44,7 +59,11 @@ export function EpisodeDetailPage() {
     queryFn: () => getTranscript(id),
   });
 
-  // Lazily backfill chapters/transcript from RSS URLs on first visit
+  const summaryQuery = useQuery({
+    queryKey: ["summary", id],
+    queryFn: () => getSummary(id),
+  });
+
   const contextMutation = useMutation({
     mutationFn: () => getEpisodeContextFn({ episodeId: id }).then((r) => r.data),
     onSuccess: () => {
@@ -80,12 +99,15 @@ export function EpisodeDetailPage() {
 
   const podcast = podcastQuery.data ?? null;
   const transcript = transcriptQuery.data ?? null;
+  const summary = summaryQuery.data ?? null;
 
   return (
     <div className="space-y-8">
       <BackLink podcastId={episode.podcastId} />
 
       <Hero episode={episode} podcast={podcast} />
+
+      <SummarySection episodeId={id} episode={episode} />
 
       {episode.chapters && episode.chapters.length > 0 && (
         <ChaptersSection
@@ -98,10 +120,13 @@ export function EpisodeDetailPage() {
       <ShowNotesSection episode={episode} />
 
       <TranscriptSection
+        episodeId={id}
         episode={episode}
         transcript={transcript}
         loading={contextMutation.isPending && !transcript}
       />
+
+      {summary && <ChatSection episodeId={id} episode={episode} />}
     </div>
   );
 }
@@ -243,6 +268,158 @@ function Hero({
   );
 }
 
+function SummarySection({
+  episodeId,
+  episode,
+}: {
+  episodeId: string;
+  episode: Episode;
+}) {
+  const queryClient = useQueryClient();
+  const summaryQuery = useQuery({
+    queryKey: ["summary", episodeId],
+    queryFn: () => getSummary(episodeId),
+  });
+
+  const generate = useMutation({
+    mutationFn: () =>
+      summarizeEpisodeFn({ episodeId }).then((r) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["summary", episodeId] });
+      queryClient.invalidateQueries({ queryKey: ["episode", episodeId] });
+    },
+  });
+
+  const [showJa, setShowJa] = useState(false);
+  const translation = useQuery({
+    queryKey: ["translation", episodeId, "summary", "ja"],
+    queryFn: () => getTranslation(episodeId, "summary", "ja"),
+    enabled: showJa,
+  });
+  const translateMutation = useMutation({
+    mutationFn: () =>
+      translateSummaryFn({
+        episodeId,
+        kind: "summary",
+        targetLanguage: "ja",
+      }).then((r) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["translation", episodeId, "summary", "ja"],
+      });
+    },
+  });
+
+  const summary = summaryQuery.data;
+  const isJapanese =
+    !episode.summary?.language || episode.summary.language === "ja";
+
+  if (summaryQuery.isLoading) {
+    return (
+      <Section title="要約" icon={<StickyNote className="size-5" />}>
+        <Skeleton className="h-24 w-full" />
+      </Section>
+    );
+  }
+
+  return (
+    <Section
+      title="要約"
+      icon={<StickyNote className="size-5" />}
+      action={
+        summary && (
+          <div className="flex items-center gap-2">
+            {!isJapanese && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setShowJa((v) => !v);
+                  if (!translation.data && !showJa) translateMutation.mutate();
+                }}
+                disabled={translateMutation.isPending}
+                className="gap-1.5 h-8"
+              >
+                <Languages className="size-3.5" />
+                {showJa ? "原文" : "日本語"}
+              </Button>
+            )}
+            <Badge
+              variant="outline"
+              className="text-[10px] uppercase tracking-wider"
+            >
+              {summary.contextTier === "transcript"
+                ? "詳細"
+                : summary.contextTier === "shownotes"
+                  ? "概要"
+                  : "簡易"}
+            </Badge>
+          </div>
+        )
+      }
+    >
+      {!summary && (
+        <Card className="p-6 text-center space-y-3">
+          <Sparkles className="size-6 text-muted-foreground mx-auto" />
+          <div className="space-y-1">
+            <p className="text-sm font-medium">要約を生成</p>
+            <p className="text-xs text-muted-foreground">
+              文字起こし・チャプター・Show Notesから要約とポイントを生成します。
+            </p>
+          </div>
+          <Button
+            variant="gradient"
+            size="sm"
+            onClick={() => generate.mutate()}
+            disabled={generate.isPending}
+          >
+            {generate.isPending ? "生成中…" : "AIで要約を生成"}
+          </Button>
+          {generate.isError && (
+            <p className="text-xs text-destructive">
+              {(generate.error as Error).message}
+            </p>
+          )}
+        </Card>
+      )}
+
+      {summary && (
+        <Card className="p-5 space-y-4">
+          {showJa && translation.data ? (
+            <div className="text-sm leading-relaxed whitespace-pre-line">
+              {translation.data.text}
+            </div>
+          ) : (
+            <>
+              <p className="text-base font-medium leading-relaxed">
+                {summary.tldr}
+              </p>
+              <div className="text-sm leading-relaxed whitespace-pre-line text-foreground/90">
+                {summary.body}
+              </div>
+              {summary.keyPoints.length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    重要ポイント
+                  </h3>
+                  <ul className="space-y-1.5">
+                    {summary.keyPoints.map((p, i) => (
+                      <li key={i} className="text-sm flex gap-2">
+                        <span className="text-primary mt-0.5">•</span>
+                        <span className="flex-1">{p}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </>
+          )}
+        </Card>
+      )}
+    </Section>
+  );
+}
+
 function ChaptersSection({
   chapters,
   episode,
@@ -262,7 +439,6 @@ function ChaptersSection({
       seek(start);
     } else {
       load(episode);
-      // Position is set by load from playback.position. Override after store update.
       setTimeout(() => seek(start), 50);
     }
   }
@@ -274,14 +450,11 @@ function ChaptersSection({
   );
 
   return (
-    <section className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold tracking-tight flex items-center gap-2">
-          <ListMusic className="size-5 text-muted-foreground" />
-          チャプター
-        </h2>
-        {source && <ChapterSourceBadge source={source} />}
-      </div>
+    <Section
+      title="チャプター"
+      icon={<ListMusic className="size-5" />}
+      action={source && <ChapterSourceBadge source={source} />}
+    >
       <Card className="divide-y divide-border overflow-hidden">
         {chapters.map((c, i) => {
           const isActive = currentId === episode.id && i === activeIndex;
@@ -315,7 +488,7 @@ function ChaptersSection({
           );
         })}
       </Card>
-    </section>
+    </Section>
   );
 }
 
@@ -343,8 +516,7 @@ function ShowNotesSection({ episode }: { episode: Episode }) {
   const links = episode.showNotes?.links ?? [];
 
   return (
-    <section className="space-y-3">
-      <h2 className="text-lg font-bold tracking-tight">エピソードについて</h2>
+    <Section title="エピソードについて">
       <Card className="p-5 space-y-4">
         {text && (
           <p className="text-sm leading-relaxed whitespace-pre-line text-foreground/90">
@@ -374,23 +546,35 @@ function ShowNotesSection({ episode }: { episode: Episode }) {
           </div>
         )}
       </Card>
-    </section>
+    </Section>
   );
 }
 
 function TranscriptSection({
+  episodeId,
   episode,
   transcript,
   loading,
 }: {
+  episodeId: string;
   episode: Episode;
   transcript: TranscriptDoc | null;
   loading: boolean;
 }) {
+  const queryClient = useQueryClient();
   const seek = usePlayerStore((s) => s.seek);
   const load = usePlayerStore((s) => s.load);
   const currentId = usePlayerStore((s) => s.episode?.id);
   const position = usePlayerStore((s) => s.position);
+
+  const generate = useMutation({
+    mutationFn: () =>
+      transcribeEpisodeFn({ episodeId }).then((r) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["transcript", episodeId] });
+      queryClient.invalidateQueries({ queryKey: ["episode", episodeId] });
+    },
+  });
 
   function jump(start: number) {
     if (currentId === episode.id) seek(start);
@@ -400,34 +584,57 @@ function TranscriptSection({
     }
   }
 
+  const minutes = episode.duration ? Math.round(episode.duration / 60) : null;
+  const estCostJpy = minutes ? Math.round(minutes * 4) : null; // ~4円/分 目安
+
   return (
-    <section className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold tracking-tight">文字起こし</h2>
-        {transcript?.source && (
+    <Section
+      title="文字起こし"
+      action={
+        transcript?.source && (
           <Badge
             variant="outline"
             className="text-[10px] uppercase tracking-wider"
           >
             {transcript.source === "rss" ? "RSS" : "AI"}
           </Badge>
-        )}
-      </div>
-
+        )
+      }
+    >
       {loading && <TranscriptSkeleton />}
 
-      {!loading && !transcript && (
+      {!loading && !transcript && episode.transcript?.status !== "pending" && (
         <Card className="p-6 text-center space-y-3">
           <Sparkles className="size-6 text-muted-foreground mx-auto" />
           <div className="space-y-1">
             <p className="text-sm font-medium">文字起こしがありません</p>
             <p className="text-xs text-muted-foreground">
-              RSSに含まれていないため、AIで生成できます。
+              RSSに含まれていないため、AIで生成できます
+              {minutes && estCostJpy
+                ? `（約${minutes}分・推定${estCostJpy}円）`
+                : ""}
+              。
             </p>
           </div>
-          <Button variant="outline" size="sm" disabled>
-            AIで生成（準備中）
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => generate.mutate()}
+            disabled={generate.isPending}
+          >
+            {generate.isPending ? "生成中…" : "AIで生成"}
           </Button>
+          {generate.isError && (
+            <p className="text-xs text-destructive">
+              {(generate.error as Error).message}
+            </p>
+          )}
+        </Card>
+      )}
+
+      {!loading && episode.transcript?.status === "pending" && (
+        <Card className="p-6 text-center text-sm text-muted-foreground">
+          生成中です。1〜数分かかります…
         </Card>
       )}
 
@@ -481,6 +688,128 @@ function TranscriptSection({
           </p>
         </Card>
       )}
+    </Section>
+  );
+}
+
+function ChatSection({
+  episodeId,
+  episode,
+}: {
+  episodeId: string;
+  episode: Episode;
+}) {
+  const { messages, send, isStreaming, error } = useEpisodeChat(episodeId);
+  const [input, setInput] = useState("");
+  const listRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    listRef.current?.scrollTo({
+      top: listRef.current.scrollHeight,
+      behavior: "smooth",
+    });
+  }, [messages]);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const text = input;
+    setInput("");
+    await send(text);
+  }
+
+  const placeholder = `「${episode.title}」について質問してみる…`;
+
+  return (
+    <Section title="QA チャット" icon={<MessageSquare className="size-5" />}>
+      <Card className="overflow-hidden">
+        {messages.length === 0 ? (
+          <div className="px-5 py-8 text-center space-y-2 text-sm text-muted-foreground">
+            <Sparkles className="size-5 text-primary mx-auto" />
+            <p>このエピソードの内容について何でも聞いてください。</p>
+            <p className="text-xs">
+              要約・チャプター・Show Notes
+              {episode.transcript?.status === "done" ? "・文字起こし" : ""}
+              を踏まえてお答えします。
+            </p>
+          </div>
+        ) : (
+          <div ref={listRef} className="max-h-[60vh] overflow-y-auto p-4 space-y-3">
+            {messages.map((m) => (
+              <div
+                key={m.id}
+                className={cn(
+                  "flex",
+                  m.role === "user" ? "justify-end" : "justify-start",
+                )}
+              >
+                <div
+                  className={cn(
+                    "rounded-2xl px-4 py-2.5 text-sm max-w-[85%] whitespace-pre-line leading-relaxed",
+                    m.role === "user"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-secondary text-secondary-foreground",
+                  )}
+                >
+                  {m.content || (isStreaming && m.role === "assistant" ? "…" : "")}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {error && (
+          <div className="px-5 py-2 text-xs text-destructive border-t border-border">
+            {error}
+          </div>
+        )}
+
+        <form
+          onSubmit={onSubmit}
+          className="border-t border-border p-2 flex items-center gap-2"
+        >
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder={placeholder}
+            disabled={isStreaming}
+            className="flex-1 bg-transparent text-sm px-3 py-2 outline-none placeholder:text-muted-foreground"
+          />
+          <Button
+            type="submit"
+            variant="gradient"
+            size="icon"
+            disabled={isStreaming || !input.trim()}
+            aria-label="送信"
+          >
+            <Send className="size-4" />
+          </Button>
+        </form>
+      </Card>
+    </Section>
+  );
+}
+
+function Section({
+  title,
+  icon,
+  action,
+  children,
+}: {
+  title: string;
+  icon?: React.ReactNode;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-bold tracking-tight flex items-center gap-2">
+          {icon && <span className="text-muted-foreground">{icon}</span>}
+          {title}
+        </h2>
+        {action}
+      </div>
+      {children}
     </section>
   );
 }

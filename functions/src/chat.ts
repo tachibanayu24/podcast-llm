@@ -80,7 +80,7 @@ export const chatWithEpisode = onRequest(
         tools: { google_search: vertex.tools.googleSearch({}) },
       });
 
-      result.pipeUIMessageStreamToResponse(res);
+      result.pipeTextStreamToResponse(res);
     } catch (err) {
       logger.error("chatWithEpisode: stream failed", err);
       if (!res.headersSent) {

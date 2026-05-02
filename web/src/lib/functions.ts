@@ -20,3 +20,22 @@ export const getEpisodeContextFn = httpsCallable<
     transcriptSource?: "rss" | "gemini";
   }
 >(functions, "getEpisodeContext");
+
+export const summarizeEpisodeFn = httpsCallable<
+  { episodeId: string; force?: boolean },
+  { ok: true; tier: "transcript" | "shownotes" | "minimal" }
+>(functions, "summarizeEpisode");
+
+export const transcribeEpisodeFn = httpsCallable<
+  { episodeId: string; force?: boolean },
+  { ok: true; segments: number }
+>(functions, "transcribeEpisode");
+
+export const translateSummaryFn = httpsCallable<
+  {
+    episodeId: string;
+    kind: "summary" | "transcript";
+    targetLanguage?: string;
+  },
+  { ok: true }
+>(functions, "translateSummary");
