@@ -34,7 +34,11 @@ export function HomePage() {
       <ul className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         {podcasts?.map((p) => (
           <li key={p.id}>
-            <Link to="/" className="block group">
+            <Link
+              to="/podcast/$id"
+              params={{ id: p.id }}
+              className="block group"
+            >
               <img
                 src={p.artwork}
                 alt=""

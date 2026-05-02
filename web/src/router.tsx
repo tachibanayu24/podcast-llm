@@ -8,6 +8,7 @@ import {
 import { AppShell } from "./components/AppShell";
 import { waitForAuth } from "./lib/auth";
 import { HomePage } from "./pages/HomePage";
+import { PodcastDetailPage } from "./pages/PodcastDetailPage";
 import { SearchPage } from "./pages/SearchPage";
 import { SignInPage } from "./pages/SignInPage";
 
@@ -47,9 +48,15 @@ const searchRoute = createRoute({
   component: SearchPage,
 });
 
+const podcastDetailRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: "/podcast/$id",
+  component: PodcastDetailPage,
+});
+
 const routeTree = rootRoute.addChildren([
   signInRoute,
-  protectedRoute.addChildren([indexRoute, searchRoute]),
+  protectedRoute.addChildren([indexRoute, searchRoute, podcastDetailRoute]),
 ]);
 
 export const router = createRouter({ routeTree });

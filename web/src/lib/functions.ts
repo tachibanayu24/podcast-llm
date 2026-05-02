@@ -6,3 +6,8 @@ export const searchPodcastsFn = httpsCallable<
   { term: string },
   SearchResult[]
 >(functions, "searchPodcasts");
+
+export const subscribePodcastFn = httpsCallable<
+  { result: SearchResult },
+  { podcastId: string; episodeCount: number }
+>(functions, "subscribePodcast");

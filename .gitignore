@@ -8,6 +8,9 @@ build/
 .next/
 .vite/
 functions/lib/
+shared/src/*.js
+shared/src/*.js.map
+shared/src/*.d.ts
 *.tsbuildinfo
 
 # Environment

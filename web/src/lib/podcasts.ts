@@ -1,13 +1,16 @@
 import {
   collection,
   doc,
+  getDoc,
   getDocs,
+  limit,
   orderBy,
   query,
-  setDoc,
+  where,
 } from "firebase/firestore";
-import type { Podcast, SearchResult } from "@podcast-llm/shared";
+import type { Episode, Podcast, SearchResult } from "@podcast-llm/shared";
 import { auth, db } from "./firebase";
+import { subscribePodcastFn } from "./functions";
 
 function requireUid(): string {
   const uid = auth.currentUser?.uid;
@@ -26,18 +29,31 @@ export async function listSubscriptions(): Promise<Podcast[]> {
   return snap.docs.map((d) => d.data() as Podcast);
 }
 
-export async function subscribeFromSearch(result: SearchResult): Promise<Podcast> {
+export async function getPodcast(podcastId: string): Promise<Podcast | null> {
   const uid = requireUid();
-  const podcast: Podcast = {
-    id: String(result.collectionId),
-    title: result.title,
-    author: result.author,
-    artwork: result.artwork,
-    feedUrl: result.feedUrl,
-    ...(result.language ? { language: result.language } : {}),
-    lastFetchedAt: 0,
-    subscribedAt: Date.now(),
-  };
-  await setDoc(doc(db, "users", uid, "podcasts", podcast.id), podcast);
-  return podcast;
+  const snap = await getDoc(doc(db, "users", uid, "podcasts", podcastId));
+  return snap.exists() ? (snap.data() as Podcast) : null;
+}
+
+export async function listEpisodes(
+  podcastId: string,
+  max = 50,
+): Promise<Episode[]> {
+  const uid = requireUid();
+  const snap = await getDocs(
+    query(
+      collection(db, "users", uid, "episodes"),
+      where("podcastId", "==", podcastId),
+      orderBy("publishedAt", "desc"),
+      limit(max),
+    ),
+  );
+  return snap.docs.map((d) => d.data() as Episode);
+}
+
+export async function subscribeFromSearch(
+  result: SearchResult,
+): Promise<{ podcastId: string; episodeCount: number }> {
+  const res = await subscribePodcastFn({ result });
+  return res.data;
 }

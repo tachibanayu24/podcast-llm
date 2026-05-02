@@ -1,5 +1,5 @@
 import { onCall } from "firebase-functions/v2/https";
-import type { SearchResult } from "@podcast-llm/shared";
+import type { SearchResult } from "./lib/types.js";
 
 export const searchPodcasts = onCall(
   { region: "asia-northeast1", maxInstances: 5 },
