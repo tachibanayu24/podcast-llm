@@ -12,6 +12,7 @@ import { PodcastDetailPage } from "./pages/PodcastDetailPage";
 import { SearchPage } from "./pages/SearchPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SignInPage } from "./pages/SignInPage";
+import { WatchlistPage } from "./pages/WatchlistPage";
 
 interface RouterContext {
   user: User | null;
@@ -51,6 +52,12 @@ const searchRoute = createRoute({
   component: SearchPage,
 });
 
+const watchlistRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: "/watchlist",
+  component: WatchlistPage,
+});
+
 const podcastDetailRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: "/podcast/$id",
@@ -68,6 +75,7 @@ const routeTree = rootRoute.addChildren([
   protectedRoute.addChildren([
     indexRoute,
     searchRoute,
+    watchlistRoute,
     podcastDetailRoute,
     settingsRoute,
   ]),

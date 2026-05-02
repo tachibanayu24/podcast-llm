@@ -1,6 +1,7 @@
-import { ChevronDown, Pause, Play, RotateCcw, X } from "lucide-react";
+import { Bookmark, ChevronDown, Pause, Play, RotateCcw, X } from "lucide-react";
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { useWatchlistToggle } from "@/hooks/useWatchlistToggle";
 import { usePlayerStore } from "@/lib/player-store";
 import { cn } from "@/lib/utils";
 
@@ -198,25 +199,58 @@ export function PlayerSheet() {
           </Button>
         </div>
 
-        {/* Speed */}
-        <div className="mt-6 flex items-center justify-center gap-1">
-          {RATES.map((r) => (
-            <button
-              key={r}
-              type="button"
-              onClick={() => setRate(r)}
-              className={cn(
-                "px-3 py-1.5 text-xs font-semibold rounded-full transition-colors tabular-nums",
-                playbackRate === r
-                  ? "bg-primary/15 text-primary"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {r}x
-            </button>
-          ))}
+        {/* Bottom row: watchlist + speed */}
+        <div className="mt-6 grid grid-cols-3 items-center">
+          <div className="justify-self-start">
+            <WatchlistButton />
+          </div>
+          <div className="flex items-center justify-center gap-1">
+            {RATES.map((r) => (
+              <button
+                key={r}
+                type="button"
+                onClick={() => setRate(r)}
+                className={cn(
+                  "px-2.5 py-1.5 text-xs font-semibold rounded-full transition-colors tabular-nums",
+                  playbackRate === r
+                    ? "bg-primary/15 text-primary"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {r}x
+              </button>
+            ))}
+          </div>
+          <div className="justify-self-end" />
         </div>
       </div>
     </div>
+  );
+}
+
+function WatchlistButton() {
+  const episode = usePlayerStore((s) => s.episode);
+  const mutation = useWatchlistToggle(episode!);
+  if (!episode) return null;
+  const inWatchlist = episode.isInWatchlist;
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={() => mutation.mutate(!inWatchlist)}
+      disabled={mutation.isPending}
+      aria-label={inWatchlist ? "あとで聴くから外す" : "あとで聴く"}
+      aria-pressed={inWatchlist}
+      className="size-11"
+    >
+      <Bookmark
+        className={cn(
+          "size-5 transition-colors",
+          inWatchlist
+            ? "fill-primary text-primary"
+            : "text-muted-foreground",
+        )}
+      />
+    </Button>
   );
 }

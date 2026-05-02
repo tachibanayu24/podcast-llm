@@ -7,6 +7,14 @@
         { "fieldPath": "podcastId", "order": "ASCENDING" },
         { "fieldPath": "publishedAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "episodes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isInWatchlist", "order": "ASCENDING" },
+        { "fieldPath": "watchlistedAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

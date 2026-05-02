@@ -1,13 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
-import { Pause, Play } from "lucide-react";
-import type { Episode, Podcast } from "@podcast-llm/shared";
+import { EpisodeRow } from "@/components/EpisodeRow";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatDate, formatDuration } from "@/lib/format";
-import { usePlayerStore } from "@/lib/player-store";
 import { getPodcast, listEpisodes } from "@/lib/podcasts";
 
 export function PodcastDetailPage() {
@@ -98,61 +94,6 @@ export function PodcastDetailPage() {
         )}
       </section>
     </div>
-  );
-}
-
-function EpisodeRow({
-  episode,
-  podcast,
-}: {
-  episode: Episode;
-  podcast: Podcast | null;
-}) {
-  const load = usePlayerStore((s) => s.load);
-  const toggle = usePlayerStore((s) => s.toggle);
-  const currentId = usePlayerStore((s) => s.episode?.id);
-  const isPlaying = usePlayerStore((s) => s.isPlaying);
-
-  const isCurrent = currentId === episode.id;
-  const showPause = isCurrent && isPlaying;
-
-  function handleClick() {
-    if (isCurrent) toggle();
-    else load(episode, podcast?.title);
-  }
-
-  return (
-    <Card className="p-4 hover:border-primary/40 transition-all duration-200 group">
-      <div className="flex items-start gap-3">
-        <div className="flex-1 min-w-0 space-y-1.5">
-          <div className="font-medium leading-snug line-clamp-2">
-            {episode.title}
-          </div>
-          <div className="text-xs text-muted-foreground flex items-center gap-2">
-            <span>{formatDate(episode.publishedAt)}</span>
-            {episode.duration ? (
-              <>
-                <span className="opacity-50">·</span>
-                <span>{formatDuration(episode.duration)}</span>
-              </>
-            ) : null}
-          </div>
-        </div>
-        <Button
-          variant={isCurrent ? "gradient" : "secondary"}
-          size="icon"
-          onClick={handleClick}
-          aria-label={showPause ? "一時停止" : "再生"}
-          className="shrink-0"
-        >
-          {showPause ? (
-            <Pause className="size-4" />
-          ) : (
-            <Play className="size-4 fill-current" />
-          )}
-        </Button>
-      </div>
-    </Card>
   );
 }
 
