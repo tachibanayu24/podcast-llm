@@ -18,17 +18,18 @@ const queryClient = new QueryClient({
   },
 });
 
-let prevUid: string | null | undefined = undefined;
-onAuthStateChanged(auth, (user) => {
-  const uid = user?.uid ?? null;
-  if (prevUid !== undefined && prevUid !== uid) {
-    router.invalidate();
-    if (!uid) queryClient.clear();
-  }
-  prevUid = uid;
-});
+await consumeRedirectResult();
+await auth.authStateReady();
 
-void consumeRedirectResult();
+let firstEvent = true;
+onAuthStateChanged(auth, (user) => {
+  if (firstEvent) {
+    firstEvent = false;
+    return;
+  }
+  router.invalidate();
+  if (!user) queryClient.clear();
+});
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
