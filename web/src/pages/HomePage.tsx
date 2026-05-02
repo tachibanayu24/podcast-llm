@@ -1,8 +1,11 @@
+import { useAuth } from "../hooks/useAuth";
+
 export function HomePage() {
+  const user = useAuth();
   return (
-    <main className="min-h-dvh p-6">
-      <h1 className="text-2xl font-bold">Podcast LLM</h1>
-      <p className="text-neutral-400 mt-2">準備中...</p>
-    </main>
+    <div className="p-6">
+      <h1 className="text-2xl font-bold">こんにちは, {user?.displayName ?? ""}</h1>
+      <p className="text-neutral-400 mt-2">これから機能を実装していきます。</p>
+    </div>
   );
 }
