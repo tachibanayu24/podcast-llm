@@ -9,7 +9,12 @@ export const subscribePodcast = onCall<
   { result: SearchResult },
   Promise<{ podcastId: string; episodeCount: number }>
 >(
-  { region: "asia-northeast1", maxInstances: 5, timeoutSeconds: 60 },
+  {
+    region: "asia-northeast1",
+    maxInstances: 5,
+    timeoutSeconds: 60,
+    invoker: "public",
+  },
   async (request) => {
     const uid = request.auth?.uid;
     if (!uid) throw new HttpsError("unauthenticated", "auth required");

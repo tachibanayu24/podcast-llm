@@ -2,7 +2,7 @@ import { onCall } from "firebase-functions/v2/https";
 import type { SearchResult } from "./lib/types.js";
 
 export const searchPodcasts = onCall(
-  { region: "asia-northeast1", maxInstances: 5 },
+  { region: "asia-northeast1", maxInstances: 5, invoker: "public" },
   async (request): Promise<SearchResult[]> => {
     const term = request.data?.term?.trim();
     if (!term) return [];
