@@ -1,8 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Check, Plus, Search } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import type { SearchResult } from "@podcast-llm/shared";
-import { searchPodcastsFn } from "../lib/functions";
-import { subscribeFromSearch } from "../lib/podcasts";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { searchPodcastsFn } from "@/lib/functions";
+import { subscribeFromSearch } from "@/lib/podcasts";
 
 export function SearchPage() {
   const [term, setTerm] = useState("");
@@ -23,35 +29,46 @@ export function SearchPage() {
   }
 
   return (
-    <div className="p-4 space-y-4">
-      <form onSubmit={onSubmit}>
-        <input
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">検索</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          podcastのタイトル・配信者で検索
+        </p>
+      </div>
+
+      <form onSubmit={onSubmit} className="relative">
+        <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+        <Input
           type="search"
           value={term}
           onChange={(e) => setTerm(e.target.value)}
-          placeholder="podcastを検索..."
-          className="w-full px-4 py-2 bg-neutral-900 border border-neutral-800 rounded-lg outline-none focus:border-neutral-600"
+          placeholder="例: コテンラジオ、Rebuild"
+          className="pl-11 h-12 text-base"
         />
       </form>
 
-      {isFetching && <p className="text-sm text-neutral-400">検索中...</p>}
+      {isFetching && <ResultListSkeleton />}
+
       {error && (
-        <p className="text-sm text-red-400">
+        <p className="text-sm text-destructive">
           {error instanceof Error ? error.message : "検索に失敗しました"}
         </p>
       )}
 
       {data && data.length === 0 && submitted && !isFetching && (
-        <p className="text-sm text-neutral-400">該当なし</p>
+        <p className="text-sm text-muted-foreground">該当なし</p>
       )}
 
-      <ul className="space-y-2">
-        {data?.map((r) => (
-          <li key={r.collectionId}>
-            <PodcastResultRow result={r} />
-          </li>
-        ))}
-      </ul>
+      {data && data.length > 0 && (
+        <ul className="space-y-2">
+          {data.map((r) => (
+            <li key={r.collectionId}>
+              <PodcastResultRow result={r} />
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -66,25 +83,64 @@ function PodcastResultRow({ result }: { result: SearchResult }) {
   });
 
   return (
-    <div className="flex gap-3 p-3 bg-neutral-900 rounded-lg">
+    <Card className="flex gap-3 p-3 hover:border-primary/50 transition-all duration-200">
       <img
         src={result.artwork}
         alt=""
-        className="w-16 h-16 rounded shrink-0"
+        className="size-16 rounded-lg shrink-0 object-cover ring-1 ring-border"
         loading="lazy"
       />
-      <div className="flex-1 min-w-0">
-        <div className="font-medium truncate">{result.title}</div>
-        <div className="text-sm text-neutral-400 truncate">{result.author}</div>
+      <div className="flex-1 min-w-0 self-center space-y-1">
+        <div className="font-medium truncate leading-tight">{result.title}</div>
+        <div className="text-sm text-muted-foreground truncate">
+          {result.author}
+        </div>
+        {result.genre && (
+          <Badge variant="outline" className="mt-1">
+            {result.genre}
+          </Badge>
+        )}
       </div>
-      <button
+      <Button
         type="button"
+        variant={subscribe.isSuccess ? "secondary" : "gradient"}
+        size="sm"
         onClick={() => subscribe.mutate()}
         disabled={subscribe.isPending || subscribe.isSuccess}
-        className="px-3 py-1 text-sm bg-white text-neutral-900 rounded hover:bg-neutral-200 disabled:opacity-50 self-center"
+        className="self-center"
       >
-        {subscribe.isSuccess ? "登録済" : subscribe.isPending ? "..." : "登録"}
-      </button>
-    </div>
+        {subscribe.isSuccess ? (
+          <>
+            <Check className="size-4" />
+            登録済
+          </>
+        ) : subscribe.isPending ? (
+          "..."
+        ) : (
+          <>
+            <Plus className="size-4" />
+            登録
+          </>
+        )}
+      </Button>
+    </Card>
+  );
+}
+
+function ResultListSkeleton() {
+  return (
+    <ul className="space-y-2">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <li key={i}>
+          <Card className="flex gap-3 p-3">
+            <Skeleton className="size-16 rounded-lg shrink-0" />
+            <div className="flex-1 min-w-0 self-center space-y-2">
+              <Skeleton className="h-4 w-2/3" />
+              <Skeleton className="h-3 w-1/3" />
+            </div>
+          </Card>
+        </li>
+      ))}
+    </ul>
   );
 }
