@@ -1,0 +1,21 @@
+{
+  "name": "podcast-llm",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.1.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "build": "pnpm -r --filter \"./web\" --filter \"./functions\" build",
+    "build:web": "pnpm --filter web build",
+    "build:functions": "pnpm --filter functions build",
+    "typecheck": "pnpm -r typecheck",
+    "deploy": "pnpm build && firebase deploy",
+    "deploy:hosting": "pnpm build:web && firebase deploy --only hosting",
+    "deploy:functions": "pnpm build:functions && firebase deploy --only functions",
+    "deploy:rules": "firebase deploy --only firestore:rules,storage"
+  }
+}
