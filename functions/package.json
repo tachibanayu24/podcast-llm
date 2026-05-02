@@ -4,7 +4,7 @@
   "private": true,
   "main": "lib/index.js",
   "engines": {
-    "node": "22"
+    "node": "24"
   },
   "scripts": {
     "build": "tsc",
@@ -16,17 +16,17 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ai-sdk/google": "^2.0.0",
-    "@google-cloud/storage": "^7.14.0",
+    "@ai-sdk/google": "^3.0.67",
+    "@google-cloud/storage": "^7.19.0",
     "@podcast-llm/shared": "workspace:*",
-    "ai": "^5.0.0",
-    "fast-xml-parser": "^5.0.0",
-    "firebase-admin": "^13.0.0",
-    "firebase-functions": "^6.1.0",
-    "zod": "^3.23.0"
+    "ai": "^6.0.174",
+    "fast-xml-parser": "^5.7.2",
+    "firebase-admin": "^13.8.0",
+    "firebase-functions": "^7.2.5",
+    "zod": "^4.4.2"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
-    "typescript": "^5.6.0"
+    "@types/node": "^25.6.0",
+    "typescript": "^6.0.3"
   }
 }
