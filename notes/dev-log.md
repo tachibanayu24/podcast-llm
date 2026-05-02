@@ -171,3 +171,34 @@ ESM時代の相互運用のため。慣れれば気にならない。
 - エピソード再生（オーディオプレイヤー）
 - ダウンロード機能（Background Fetch + IndexedDB）
 - 文字起こし・要約・QA
+
+---
+
+## 2026-05-02: 再生プレイヤーの設計
+
+### ミニプレイヤー + フルスクリーン
+Spotifyに馴染んでるので操作系はそれを真似る。下にずっと貼り付くミニプレイヤー、タップで全画面に展開、ChevronDownで戻る。状態は zustand 1個で持つ：エピソード、再生位置、再生中、再生速度、isExpanded。
+
+audio要素は Player.tsx のなかで隠して持つ。store の `isPlaying` を見て `audio.play()` / `audio.pause()` を呼ぶ。再生位置は `timeupdate` で store に反映、外からの `seek()` は store の position を見て1.5秒以上ズレたら audio.currentTime を書き換える。一方向のフローにしておくと予測しやすい。
+
+### 細かいハマりどころ
+- ミニプレイヤーと bottom nav の重なり：それぞれを `fixed bottom-0` にしようとして詰まった。結局、AppShell に1つだけ `fixed inset-x-0 bottom-0` のラッパーを置いて、その中に Player → BottomNav の順で並べるのが一番素直。safe-area-inset-bottom もこのラッパーで一括処理。
+
+- 再生速度のpersist：エピソード切り替えても 1.25x のままでいたい。zustand の persist middleware で `playbackRate` だけ localStorage に保存。他の状態（episode, position 等）は per-session でいい。
+
+- Media Session API：Android のロック画面/通知の操作を有効にする。play/pause/seekbackward/seekforward/seekto を登録。`seekbackward` のデフォルトは10秒、podcastだと15秒戻る・30秒進むがしっくりくる。
+
+### range slider のスタイル
+ネイティブの input[type=range] を CSS でなんとかする派。track の進捗グラデーションは `--progress` カスタムプロパティを CSS から `linear-gradient` の停止位置に渡すだけ。Firefox は `::-moz-range-progress` が別系統なので両方書く。
+
+```css
+background: linear-gradient(
+  to right,
+  var(--color-primary) 0%,
+  var(--color-pink) var(--progress, 0%),
+  var(--color-secondary) var(--progress, 0%),
+  var(--color-secondary) 100%
+);
+```
+
+JSX 側で `style={{ "--progress": "42%" }}` を渡す。div を重ねて作るより薄い。
