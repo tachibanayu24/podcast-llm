@@ -87,10 +87,11 @@ export const summarizeEpisode = onCall<
     });
 
     try {
+      const startedAt = Date.now();
       const vertex = getVertex();
       const model = vertex(MODELS.fast);
 
-      const { object } = await generateObject({
+      const { object, usage } = await generateObject({
         model,
         schema,
         prompt: buildPrompt(ep, context, tier),
@@ -145,7 +146,14 @@ export const summarizeEpisode = onCall<
 
       await epRef.update(epUpdates);
 
-      logger.info("summarizeEpisode: done", { episodeId, tier });
+      logger.info("summarizeEpisode: done", {
+        episodeId,
+        tier,
+        model: MODELS.fast,
+        durationMs: Date.now() - startedAt,
+        inputTokens: usage?.inputTokens,
+        outputTokens: usage?.outputTokens,
+      });
       return { ok: true, tier };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -182,8 +190,14 @@ function buildContext(ep: Episode, transcript: TranscriptDoc | null): string {
   }
   if (transcript) {
     parts.push("【文字起こし】");
-    // For very long transcripts, prefer joined text (segments may be too verbose)
-    parts.push(transcript.text.slice(0, 200_000));
+    const TRANSCRIPT_CAP = 200_000;
+    if (transcript.text.length > TRANSCRIPT_CAP) {
+      logger.warn("summarize: transcript truncated", {
+        original: transcript.text.length,
+        kept: TRANSCRIPT_CAP,
+      });
+    }
+    parts.push(transcript.text.slice(0, TRANSCRIPT_CAP));
     parts.push("");
   }
   return parts.join("\n");

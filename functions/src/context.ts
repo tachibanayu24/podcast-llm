@@ -2,8 +2,12 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
 import { db } from "./lib/admin.js";
 import { parseChaptersJson } from "./lib/chapters-parser.js";
+import { safeFetchText } from "./lib/safe-fetch.js";
 import { parseTranscript } from "./lib/transcript-parser.js";
 import type { Episode, TranscriptDoc } from "./lib/types.js";
+
+const CHAPTERS_MAX_BYTES = 1 * 1024 * 1024; // 1 MB
+const TRANSCRIPT_MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 
 interface ContextResponse {
   hasChapters: boolean;
@@ -44,12 +48,12 @@ export const getEpisodeContext = onCall<
     // Backfill chapters from <podcast:chapters> URL if not already
     if (!chaptersFetched && ep.chaptersUrl) {
       try {
-        const res = await fetch(ep.chaptersUrl, {
-          headers: { "User-Agent": "podcast-llm/0.1" },
+        const res = await safeFetchText(ep.chaptersUrl, {
+          timeoutMs: 20_000,
+          maxBytes: CHAPTERS_MAX_BYTES,
         });
         if (res.ok) {
-          const body = await res.text();
-          const chapters = parseChaptersJson(body);
+          const chapters = parseChaptersJson(res.body);
           if (chapters.length > 0) {
             await epRef.update({
               chapters,
@@ -71,12 +75,12 @@ export const getEpisodeContext = onCall<
       const source = pickBestTranscript(ep.transcriptSources);
       if (source) {
         try {
-          const res = await fetch(source.url, {
-            headers: { "User-Agent": "podcast-llm/0.1" },
+          const res = await safeFetchText(source.url, {
+            timeoutMs: 30_000,
+            maxBytes: TRANSCRIPT_MAX_BYTES,
           });
           if (res.ok) {
-            const body = await res.text();
-            const parsed = parseTranscript(body, source.type);
+            const parsed = parseTranscript(res.body, source.type);
             if (parsed && parsed.text.length > 0) {
               const doc: TranscriptDoc = {
                 episodeId,

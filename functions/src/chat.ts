@@ -42,14 +42,19 @@ export const chatWithEpisode = onRequest(
       return;
     }
 
-    const { episodeId, messages } = req.body as {
+    const { episodeId, messages, useSearch } = req.body as {
       episodeId?: string;
       messages?: ChatMessage[];
+      useSearch?: boolean;
     };
     if (!episodeId || !Array.isArray(messages) || messages.length === 0) {
       res.status(400).send("episodeId and messages required");
       return;
     }
+    // Cap message history length to bound context size and cost.
+    const MAX_HISTORY = 20;
+    const trimmed =
+      messages.length > MAX_HISTORY ? messages.slice(-MAX_HISTORY) : messages;
 
     const epSnap = await db.doc(`users/${uid}/episodes/${episodeId}`).get();
     if (!epSnap.exists) {
@@ -76,8 +81,11 @@ export const chatWithEpisode = onRequest(
       const result = streamText({
         model: vertex(MODELS.smart),
         system,
-        messages: messages.map((m) => ({ role: m.role, content: m.content })),
-        tools: { google_search: vertex.tools.googleSearch({}) },
+        messages: trimmed.map((m) => ({ role: m.role, content: m.content })),
+        // Search is opt-in to bound LLM cost; default relies on episode context.
+        ...(useSearch
+          ? { tools: { google_search: vertex.tools.googleSearch({}) } }
+          : {}),
       });
 
       result.pipeTextStreamToResponse(res);
@@ -133,7 +141,14 @@ function buildSystemPrompt(
 
   if (transcript) {
     parts.push("", "## 文字起こし");
-    parts.push(transcript.text.slice(0, 200_000));
+    const TRANSCRIPT_CAP = 200_000;
+    if (transcript.text.length > TRANSCRIPT_CAP) {
+      logger.warn("chat: transcript truncated", {
+        original: transcript.text.length,
+        kept: TRANSCRIPT_CAP,
+      });
+    }
+    parts.push(transcript.text.slice(0, TRANSCRIPT_CAP));
   }
 
   return parts.join("\n");

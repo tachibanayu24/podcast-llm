@@ -1,4 +1,5 @@
 import { XMLParser } from "fast-xml-parser";
+import { safeFetchText } from "./safe-fetch.js";
 import type {
   Chapter,
   ChapterSource,
@@ -7,6 +8,9 @@ import type {
   ShowNotes,
   TranscriptSourceRef,
 } from "./types.js";
+
+const FEED_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
+const FEED_TIMEOUT_MS = 30_000;
 
 interface RawEnclosure {
   "@_url"?: string;
@@ -94,13 +98,12 @@ export async function fetchAndParseFeed(
   feedUrl: string,
   podcastId: string,
 ): Promise<ParsedFeed> {
-  const res = await fetch(feedUrl, {
-    headers: { "User-Agent": "podcast-llm/0.1" },
-    redirect: "follow",
+  const res = await safeFetchText(feedUrl, {
+    timeoutMs: FEED_TIMEOUT_MS,
+    maxBytes: FEED_MAX_BYTES,
   });
   if (!res.ok) throw new Error(`feed fetch failed: ${res.status}`);
-  const xml = await res.text();
-  const data = parser.parse(xml) as RawFeed;
+  const data = parser.parse(res.body) as RawFeed;
   const channel = data.rss?.channel;
   if (!channel) throw new Error("invalid feed: no channel");
 

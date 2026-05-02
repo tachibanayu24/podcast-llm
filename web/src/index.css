@@ -204,12 +204,17 @@
 .prose-podcast p {
   margin: 0;
 }
+.prose-podcast {
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+}
 .prose-podcast a {
   color: var(--color-primary);
   text-decoration: underline;
   text-decoration-color: color-mix(in oklch, var(--color-primary) 40%, transparent);
   text-underline-offset: 2px;
   transition: text-decoration-color 0.15s;
+  word-break: break-all;
 }
 .prose-podcast a:hover {
   text-decoration-color: var(--color-primary);
