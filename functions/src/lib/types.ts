@@ -54,6 +54,7 @@ export interface Episode {
   artwork?: string;
 
   isInWatchlist: boolean;
+  watchlistedAt?: number;
   isDownloaded: boolean;
   downloadedAt?: number;
 

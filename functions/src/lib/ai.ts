@@ -1,15 +1,21 @@
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { defineSecret } from "firebase-functions/params";
+import { createVertex } from "@ai-sdk/google-vertex";
 
-export const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
+const PROJECT_ID = process.env.GCLOUD_PROJECT ?? process.env.GCP_PROJECT ?? "";
+const LOCATION = "asia-northeast1";
 
 export const MODELS = {
   fast: "gemini-2.5-flash",
-  smart: "gemini-3.1-pro-preview",
+  smart: "gemini-3-pro-preview",
 } as const;
 
-export function getGoogle() {
-  return createGoogleGenerativeAI({
-    apiKey: GEMINI_API_KEY.value(),
-  });
+let vertex: ReturnType<typeof createVertex> | null = null;
+
+export function getVertex() {
+  if (!vertex) {
+    vertex = createVertex({
+      project: PROJECT_ID,
+      location: LOCATION,
+    });
+  }
+  return vertex;
 }
