@@ -1,12 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
-import { Play } from "lucide-react";
-import type { Episode } from "@podcast-llm/shared";
+import { Pause, Play } from "lucide-react";
+import type { Episode, Podcast } from "@podcast-llm/shared";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDate, formatDuration } from "@/lib/format";
+import { usePlayerStore } from "@/lib/player-store";
 import { getPodcast, listEpisodes } from "@/lib/podcasts";
 
 export function PodcastDetailPage() {
@@ -90,7 +91,7 @@ export function PodcastDetailPage() {
           <ul className="space-y-2">
             {episodes.map((ep) => (
               <li key={ep.id}>
-                <EpisodeRow episode={ep} />
+                <EpisodeRow episode={ep} podcast={podcast ?? null} />
               </li>
             ))}
           </ul>
@@ -100,7 +101,26 @@ export function PodcastDetailPage() {
   );
 }
 
-function EpisodeRow({ episode }: { episode: Episode }) {
+function EpisodeRow({
+  episode,
+  podcast,
+}: {
+  episode: Episode;
+  podcast: Podcast | null;
+}) {
+  const load = usePlayerStore((s) => s.load);
+  const toggle = usePlayerStore((s) => s.toggle);
+  const currentId = usePlayerStore((s) => s.episode?.id);
+  const isPlaying = usePlayerStore((s) => s.isPlaying);
+
+  const isCurrent = currentId === episode.id;
+  const showPause = isCurrent && isPlaying;
+
+  function handleClick() {
+    if (isCurrent) toggle();
+    else load(episode, podcast?.title);
+  }
+
   return (
     <Card className="p-4 hover:border-primary/40 transition-all duration-200 group">
       <div className="flex items-start gap-3">
@@ -119,12 +139,17 @@ function EpisodeRow({ episode }: { episode: Episode }) {
           </div>
         </div>
         <Button
-          variant="gradient"
+          variant={isCurrent ? "gradient" : "secondary"}
           size="icon"
-          className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-          aria-label="再生"
+          onClick={handleClick}
+          aria-label={showPause ? "一時停止" : "再生"}
+          className="shrink-0"
         >
-          <Play className="size-4 fill-current" />
+          {showPause ? (
+            <Pause className="size-4" />
+          ) : (
+            <Play className="size-4 fill-current" />
+          )}
         </Button>
       </div>
     </Card>
