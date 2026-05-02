@@ -1,27 +1,30 @@
 import {
   Outlet,
-  createRootRoute,
+  createRootRouteWithContext,
   createRoute,
   createRouter,
   redirect,
 } from "@tanstack/react-router";
+import type { User } from "firebase/auth";
 import { AppShell } from "./components/AppShell";
-import { waitForAuth } from "./lib/auth";
 import { HomePage } from "./pages/HomePage";
 import { PodcastDetailPage } from "./pages/PodcastDetailPage";
 import { SearchPage } from "./pages/SearchPage";
 import { SignInPage } from "./pages/SignInPage";
 
-const rootRoute = createRootRoute({
+interface RouterContext {
+  user: User | null;
+}
+
+const rootRoute = createRootRouteWithContext<RouterContext>()({
   component: () => <Outlet />,
 });
 
 const signInRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/signin",
-  beforeLoad: async () => {
-    const user = await waitForAuth();
-    if (user) throw redirect({ to: "/" });
+  beforeLoad: ({ context }) => {
+    if (context.user) throw redirect({ to: "/" });
   },
   component: SignInPage,
 });
@@ -29,9 +32,8 @@ const signInRoute = createRoute({
 const protectedRoute = createRoute({
   getParentRoute: () => rootRoute,
   id: "_app",
-  beforeLoad: async () => {
-    const user = await waitForAuth();
-    if (!user) throw redirect({ to: "/signin" });
+  beforeLoad: ({ context }) => {
+    if (!context.user) throw redirect({ to: "/signin" });
   },
   component: AppShell,
 });
@@ -59,7 +61,10 @@ const routeTree = rootRoute.addChildren([
   protectedRoute.addChildren([indexRoute, searchRoute, podcastDetailRoute]),
 ]);
 
-export const router = createRouter({ routeTree });
+export const router = createRouter({
+  routeTree,
+  context: { user: null },
+});
 
 declare module "@tanstack/react-router" {
   interface Register {

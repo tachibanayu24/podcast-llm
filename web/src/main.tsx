@@ -1,10 +1,10 @@
-import { StrictMode } from "react";
+import { StrictMode, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider } from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { onAuthStateChanged } from "firebase/auth";
+import type { User } from "firebase/auth";
 import { auth } from "./lib/firebase";
-import { consumeRedirectResult } from "./lib/auth";
+import { useAuth } from "./hooks/useAuth";
 import { router } from "./router";
 import "./index.css";
 
@@ -18,23 +18,26 @@ const queryClient = new QueryClient({
   },
 });
 
-await consumeRedirectResult();
 await auth.authStateReady();
 
-let firstEvent = true;
-onAuthStateChanged(auth, (user) => {
-  if (firstEvent) {
-    firstEvent = false;
-    return;
-  }
-  router.invalidate();
-  if (!user) queryClient.clear();
-});
+function InnerApp() {
+  const user = useAuth();
+  const prevUser = useRef<User | null>(user);
+
+  useEffect(() => {
+    if (prevUser.current && !user) {
+      queryClient.clear();
+    }
+    prevUser.current = user;
+  }, [user]);
+
+  return <RouterProvider router={router} context={{ user }} />;
+}
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <InnerApp />
     </QueryClientProvider>
   </StrictMode>,
 );
