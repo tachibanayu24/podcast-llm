@@ -130,6 +130,27 @@ Firebase Functions のデプロイは内部で `npm install` を走らせる。p
 
 drift（型のずれ）リスクはあるが、3-5型くらいなら許容。複雑になってきたらバンドル戦略に切り替える。
 
+### Cloud Functions v2 の CORS 罠
+ローカルから検索を叩こうとしたら CORS エラー：「No 'Access-Control-Allow-Origin' header」。
+
+中身を curl で叩いてみたら、Google Frontend から **403 Forbidden** が返ってきていた。CORSではなく**IAMが原因**。Cloud Functions Gen2 は内部的に Cloud Run で動いていて、Cloud Run は呼び出しに `roles/run.invoker` のIAMを要求する。未認証のpreflight (OPTIONS) 段階でこれが弾かれる → ブラウザは CORS エラーとして見せる。
+
+`firebase-functions` には `invoker: "public"` というオプションがあるが、 firebase-tools 15.x で **これが Cloud Run IAM に反映されない既知のバグ** がある（GitHub issue 6017 とか）。
+
+仕方なく gcloud で直接付与：
+```bash
+gcloud run services add-iam-policy-binding searchpodcasts \
+  --region=asia-northeast1 \
+  --member=allUsers \
+  --role=roles/run.invoker
+```
+
+ハマりポイント：
+- Cloud Run の service 名は **すべて小文字**。`searchPodcasts` という関数は Cloud Run 上では `searchpodcasts`
+- 個人アカウントの gcloud auth が必要（仕事用 gcloud は personal project にアクセス不可）
+
+教訓: Functions v2 を本番デプロイしたら、IAM が allUsers に付いてるか必ず確認する。
+
 ### TypeScript 6 + NodeNext の作法
 細かいけど、TypeScript 6 + NodeNext moduleResolution だと相対インポートに `.js` 拡張子を明示する必要がある：
 
