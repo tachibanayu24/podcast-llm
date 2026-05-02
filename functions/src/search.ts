@@ -13,11 +13,18 @@ export const searchPodcasts = onCall(
     url.searchParams.set("country", "JP");
     url.searchParams.set("limit", "30");
 
-    const res = await fetch(url);
-    if (!res.ok) {
-      throw new Error(`iTunes search failed: ${res.status}`);
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 10_000);
+    let json: { results: ITunesPodcast[] };
+    try {
+      const res = await fetch(url, { signal: ctrl.signal });
+      if (!res.ok) {
+        throw new Error(`iTunes search failed: ${res.status}`);
+      }
+      json = (await res.json()) as { results: ITunesPodcast[] };
+    } finally {
+      clearTimeout(timer);
     }
-    const json = (await res.json()) as { results: ITunesPodcast[] };
 
     return json.results
       .filter((r) => r.feedUrl)
