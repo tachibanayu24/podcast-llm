@@ -1,0 +1,32 @@
+{
+  "name": "functions",
+  "version": "0.0.0",
+  "private": true,
+  "main": "lib/index.js",
+  "engines": {
+    "node": "22"
+  },
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc -w",
+    "serve": "pnpm build && firebase emulators:start --only functions",
+    "shell": "pnpm build && firebase functions:shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ai-sdk/google": "^2.0.0",
+    "@google-cloud/storage": "^7.14.0",
+    "@podcast-llm/shared": "workspace:*",
+    "ai": "^5.0.0",
+    "fast-xml-parser": "^5.0.0",
+    "firebase-admin": "^13.0.0",
+    "firebase-functions": "^6.1.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}
