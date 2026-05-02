@@ -60,9 +60,13 @@ export function EpisodeRow({
               {podcast.title}
             </Link>
           )}
-          <div className="font-medium leading-snug line-clamp-2">
+          <Link
+            to="/episode/$id"
+            params={{ id: episode.id }}
+            className="font-medium leading-snug line-clamp-2 hover:text-primary transition-colors block"
+          >
             {episode.title}
-          </div>
+          </Link>
           <div className="text-xs text-muted-foreground flex items-center gap-2">
             <span>{formatDate(episode.publishedAt)}</span>
             {episode.duration ? (

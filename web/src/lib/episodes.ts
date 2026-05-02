@@ -1,6 +1,7 @@
 import {
   collection,
   doc,
+  getDoc,
   getDocs,
   limit,
   orderBy,
@@ -8,7 +9,7 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
-import type { Episode } from "@podcast-llm/shared";
+import type { Episode, TranscriptDoc } from "@podcast-llm/shared";
 import { auth, db } from "./firebase";
 
 function requireUid(): string {
@@ -53,4 +54,18 @@ export async function listWatchlist(max = 100): Promise<Episode[]> {
     ),
   );
   return snap.docs.map((d) => d.data() as Episode);
+}
+
+export async function getEpisode(episodeId: string): Promise<Episode | null> {
+  const uid = requireUid();
+  const snap = await getDoc(doc(db, "users", uid, "episodes", episodeId));
+  return snap.exists() ? (snap.data() as Episode) : null;
+}
+
+export async function getTranscript(
+  episodeId: string,
+): Promise<TranscriptDoc | null> {
+  const uid = requireUid();
+  const snap = await getDoc(doc(db, "users", uid, "transcripts", episodeId));
+  return snap.exists() ? (snap.data() as TranscriptDoc) : null;
 }

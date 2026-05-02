@@ -11,3 +11,12 @@ export const subscribePodcastFn = httpsCallable<
   { result: SearchResult },
   { podcastId: string; episodeCount: number }
 >(functions, "subscribePodcast");
+
+export const getEpisodeContextFn = httpsCallable<
+  { episodeId: string },
+  {
+    hasChapters: boolean;
+    hasTranscript: boolean;
+    transcriptSource?: "rss" | "gemini";
+  }
+>(functions, "getEpisodeContext");
