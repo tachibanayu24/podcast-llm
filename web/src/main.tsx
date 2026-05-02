@@ -25,10 +25,11 @@ function InnerApp() {
   const prevUser = useRef<User | null>(user);
 
   useEffect(() => {
-    if (prevUser.current && !user) {
-      queryClient.clear();
-    }
+    const wasUser = prevUser.current;
     prevUser.current = user;
+    if (wasUser?.uid === user?.uid) return;
+    if (wasUser && !user) queryClient.clear();
+    router.invalidate();
   }, [user]);
 
   return <RouterProvider router={router} context={{ user }} />;
