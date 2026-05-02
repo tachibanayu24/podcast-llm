@@ -9,14 +9,9 @@ import {
   where,
 } from "firebase/firestore";
 import type { Episode, Podcast, SearchResult } from "@podcast-llm/shared";
-import { auth, db } from "./firebase";
+import { requireUid } from "./auth";
+import { db } from "./firebase";
 import { subscribePodcastFn } from "./functions";
-
-function requireUid(): string {
-  const uid = auth.currentUser?.uid;
-  if (!uid) throw new Error("not authenticated");
-  return uid;
-}
 
 export async function listSubscriptions(): Promise<Podcast[]> {
   const uid = requireUid();

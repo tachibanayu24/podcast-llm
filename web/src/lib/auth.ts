@@ -8,3 +8,9 @@ export async function signInWithGoogle() {
 export async function signOut() {
   await fbSignOut(auth);
 }
+
+export function requireUid(): string {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error("not authenticated");
+  return uid;
+}

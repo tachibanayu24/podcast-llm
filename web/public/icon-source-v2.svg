@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- background: same palette as v1, slight inset feel -->
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1a0a2e"/>
+      <stop offset="60%" stop-color="#0f0a1a"/>
+      <stop offset="100%" stop-color="#070510"/>
+    </linearGradient>
+    <!-- subtle ambient halo behind the bars (no new color, just the primary) -->
+    <radialGradient id="halo" cx="0.5" cy="0.5" r="0.55">
+      <stop offset="0%" stop-color="#a855f7" stop-opacity="0.28"/>
+      <stop offset="60%" stop-color="#a855f7" stop-opacity="0.05"/>
+      <stop offset="100%" stop-color="#a855f7" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- metallic cylinder gradient (horizontal): dark edge → bright center → dark edge -->
+    <linearGradient id="metal" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"   stop-color="#3a1452"/>
+      <stop offset="18%"  stop-color="#6d28d9"/>
+      <stop offset="50%"  stop-color="#f0abfc"/>
+      <stop offset="82%"  stop-color="#7c3aed"/>
+      <stop offset="100%" stop-color="#2a0d3d"/>
+    </linearGradient>
+    <!-- vertical sheen overlay: brighter near top, darker near bottom -->
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#ffffff" stop-opacity="0.32"/>
+      <stop offset="22%"  stop-color="#ffffff" stop-opacity="0.06"/>
+      <stop offset="55%"  stop-color="#000000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.35"/>
+    </linearGradient>
+    <!-- thin top specular line -->
+    <linearGradient id="spec" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <!-- bottom rim glow (echo of color) -->
+    <linearGradient id="rim" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#e879f9" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#e879f9" stop-opacity="0"/>
+    </linearGradient>
+
+    <linearGradient id="spark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#fbcfe8"/>
+    </linearGradient>
+
+    <!-- drop shadow (raised bars) -->
+    <filter id="raised" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="6"/>
+      <feOffset dx="0" dy="8" result="off"/>
+      <feComponentTransfer in="off" result="shadow">
+        <feFuncA type="linear" slope="0.55"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode in="shadow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- soft outer glow for the whole stack (subtle bloom in same hue) -->
+    <filter id="bloom" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="10" result="b"/>
+      <feComponentTransfer in="b" result="bb">
+        <feFuncA type="linear" slope="0.55"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode in="bb"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <clipPath id="round">
+      <rect x="0" y="0" width="512" height="512" rx="112" ry="112"/>
+    </clipPath>
+
+    <!-- bar geometry as symbol -->
+    <symbol id="bars" overflow="visible">
+      <rect x="118" y="216" width="36" height="80"  rx="18"/>
+      <rect x="178" y="166" width="36" height="180" rx="18"/>
+      <rect x="238" y="126" width="36" height="260" rx="18"/>
+      <rect x="298" y="156" width="36" height="200" rx="18"/>
+      <rect x="358" y="196" width="36" height="120" rx="18"/>
+    </symbol>
+    <!-- thin specular line near the top of each bar -->
+    <symbol id="specs" overflow="visible">
+      <rect x="126" y="222" width="20" height="22" rx="10"/>
+      <rect x="186" y="172" width="20" height="22" rx="10"/>
+      <rect x="246" y="132" width="20" height="22" rx="10"/>
+      <rect x="306" y="162" width="20" height="22" rx="10"/>
+      <rect x="366" y="202" width="20" height="22" rx="10"/>
+    </symbol>
+  </defs>
+
+  <g clip-path="url(#round)">
+    <rect x="0" y="0" width="512" height="512" fill="url(#bg)"/>
+    <rect x="0" y="0" width="512" height="512" fill="url(#halo)"/>
+
+    <!-- bars stack: shadow → metal → vertical sheen → bottom rim → top specular -->
+    <g filter="url(#bloom)">
+      <g filter="url(#raised)">
+        <use href="#bars" fill="url(#metal)"/>
+        <use href="#bars" fill="url(#sheen)"/>
+        <use href="#bars" fill="url(#rim)" opacity="0.7"/>
+        <use href="#specs" fill="url(#spec)"/>
+      </g>
+    </g>
+
+    <!-- sparkles (same as v1) -->
+    <g transform="translate(396 130)" fill="url(#spark)">
+      <path d="M0 -42 C 6 -14, 14 -6, 42 0 C 14 6, 6 14, 0 42 C -6 14, -14 6, -42 0 C -14 -6, -6 -14, 0 -42 Z"/>
+    </g>
+    <g transform="translate(98 380) scale(0.45)" fill="url(#spark)" opacity="0.9">
+      <path d="M0 -42 C 6 -14, 14 -6, 42 0 C 14 6, 6 14, 0 42 C -6 14, -14 6, -42 0 C -14 -6, -6 -14, 0 -42 Z"/>
+    </g>
+  </g>
+</svg>

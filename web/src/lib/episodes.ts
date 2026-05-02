@@ -16,13 +16,8 @@ import type {
   TranscriptDoc,
   TranslationDoc,
 } from "@podcast-llm/shared";
+import { requireUid } from "./auth";
 import { auth, db } from "./firebase";
-
-function requireUid(): string {
-  const uid = auth.currentUser?.uid;
-  if (!uid) throw new Error("not authenticated");
-  return uid;
-}
 
 export async function savePlaybackPosition(
   episodeId: string,
