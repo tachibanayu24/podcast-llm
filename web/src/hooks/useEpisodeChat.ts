@@ -10,6 +10,7 @@ export interface ChatMessage {
 interface UseEpisodeChatResult {
   messages: ChatMessage[];
   send: (text: string) => Promise<void>;
+  stop: () => void;
   isStreaming: boolean;
   error: string | null;
   reset: () => void;
@@ -26,6 +27,12 @@ export function useEpisodeChat(episodeId: string): UseEpisodeChatResult {
     abortRef.current = null;
     setMessages([]);
     setError(null);
+    setIsStreaming(false);
+  }, []);
+
+  const stop = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
     setIsStreaming(false);
   }, []);
 
@@ -104,5 +111,5 @@ export function useEpisodeChat(episodeId: string): UseEpisodeChatResult {
     [episodeId, messages, isStreaming],
   );
 
-  return { messages, send, isStreaming, error, reset };
+  return { messages, send, stop, isStreaming, error, reset };
 }

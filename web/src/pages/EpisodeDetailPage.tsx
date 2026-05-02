@@ -13,6 +13,7 @@ import {
   Play,
   Send,
   Sparkles,
+  Square,
   StickyNote,
   X,
 } from "lucide-react";
@@ -26,6 +27,7 @@ import { SanitizedHtml } from "@/components/SanitizedHtml";
 import { useEpisodeChat } from "@/hooks/useEpisodeChat";
 import { useEpisodeDownload } from "@/hooks/useEpisodeDownload";
 import { useWatchlistToggle } from "@/hooks/useWatchlistToggle";
+import { friendlyError } from "@/lib/errors";
 import {
   getEpisode,
   getSummary,
@@ -392,8 +394,16 @@ function SummarySection({
                 disabled={translateMutation.isPending}
                 className="gap-1.5 h-8"
               >
-                <Languages className="size-3.5" />
-                {showJa ? "原文" : "日本語"}
+                {translateMutation.isPending ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Languages className="size-3.5" />
+                )}
+                {translateMutation.isPending
+                  ? "翻訳中"
+                  : showJa
+                    ? "原文"
+                    : "日本語"}
               </Button>
             )}
             <Badge
@@ -429,7 +439,7 @@ function SummarySection({
           </Button>
           {generate.isError && (
             <p className="text-xs text-destructive">
-              {(generate.error as Error).message}
+              {friendlyError(generate.error)}
             </p>
           )}
         </Card>
@@ -655,7 +665,7 @@ function TranscriptSection({
           </Button>
           {generate.isError && (
             <p className="text-xs text-destructive">
-              {(generate.error as Error).message}
+              {friendlyError(generate.error)}
             </p>
           )}
         </Card>
@@ -728,19 +738,33 @@ function ChatSection({
   episodeId: string;
   episode: Episode;
 }) {
-  const { messages, send, isStreaming, error } = useEpisodeChat(episodeId);
+  const { messages, send, stop, isStreaming, error } = useEpisodeChat(episodeId);
   const [input, setInput] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
+  const stickyToBottom = useRef(true);
+
+  // Track whether user is at the bottom of the chat
+  function onScroll(e: React.UIEvent<HTMLDivElement>) {
+    const el = e.currentTarget;
+    stickyToBottom.current =
+      el.scrollHeight - (el.scrollTop + el.clientHeight) < 80;
+  }
 
   useEffect(() => {
-    listRef.current?.scrollTo({
-      top: listRef.current.scrollHeight,
-      behavior: "smooth",
-    });
+    if (stickyToBottom.current) {
+      listRef.current?.scrollTo({
+        top: listRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    }
   }, [messages]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (isStreaming) {
+      stop();
+      return;
+    }
     const text = input;
     setInput("");
     await send(text);
@@ -762,7 +786,11 @@ function ChatSection({
             </p>
           </div>
         ) : (
-          <div ref={listRef} className="max-h-[60vh] overflow-y-auto p-4 space-y-3">
+          <div
+            ref={listRef}
+            onScroll={onScroll}
+            className="max-h-[60vh] overflow-y-auto p-4 space-y-3"
+          >
             {messages.map((m) => (
               <div
                 key={m.id}
@@ -797,20 +825,20 @@ function ChatSection({
           className="border-t border-border p-2 flex items-center gap-2"
         >
           <input
+            aria-label="質問を入力"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={placeholder}
-            disabled={isStreaming}
             className="flex-1 bg-transparent text-sm px-3 py-2 outline-none placeholder:text-muted-foreground"
           />
           <Button
             type="submit"
-            variant="gradient"
+            variant={isStreaming ? "secondary" : "gradient"}
             size="icon"
-            disabled={isStreaming || !input.trim()}
-            aria-label="送信"
+            disabled={!isStreaming && !input.trim()}
+            aria-label={isStreaming ? "停止" : "送信"}
           >
-            <Send className="size-4" />
+            {isStreaming ? <Square className="size-4" /> : <Send className="size-4" />}
           </Button>
         </form>
       </Card>

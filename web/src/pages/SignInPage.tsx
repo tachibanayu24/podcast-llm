@@ -2,6 +2,7 @@ import { useState } from "react";
 import { GoogleIcon } from "@/components/icons/GoogleIcon";
 import { Button } from "@/components/ui/button";
 import { signInWithGoogle } from "@/lib/auth";
+import { friendlyError } from "@/lib/errors";
 
 export function SignInPage() {
   const [error, setError] = useState<string | null>(null);
@@ -12,8 +13,11 @@ export function SignInPage() {
     setError(null);
     try {
       await signInWithGoogle();
+      // success: useAuth → router.invalidate redirects to /
+      // If for some reason auth state doesn't update within 8s, re-enable button
+      setTimeout(() => setBusy(false), 8000);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "サインインに失敗しました");
+      setError(friendlyError(e));
       setBusy(false);
     }
   }

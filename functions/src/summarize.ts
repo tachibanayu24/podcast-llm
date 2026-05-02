@@ -60,7 +60,11 @@ export const summarizeEpisode = onCall<
     const ep = epSnap.data() as Episode;
 
     if (!force && ep.summary?.status === "done") {
-      return { ok: true, tier: (ep as Episode & { _summaryTier?: SummaryDoc["contextTier"] })._summaryTier ?? "shownotes" };
+      const existing = await db.doc(`users/${uid}/summaries/${episodeId}`).get();
+      if (existing.exists) {
+        return { ok: true, tier: (existing.data() as SummaryDoc).contextTier };
+      }
+      // Status says done but doc missing — fall through to regenerate
     }
 
     const transcriptSnap = await db
