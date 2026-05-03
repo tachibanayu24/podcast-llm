@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { estimateTranscribeCostJpy } from "@/lib/cost";
 import { friendlyError } from "@/lib/errors";
 import { formatTimestamp } from "@/lib/format";
 import { transcribeEpisodeFn } from "@/lib/functions";
@@ -46,7 +47,9 @@ export function TranscriptSection({
   }
 
   const minutes = episode.duration ? Math.round(episode.duration / 60) : null;
-  const estCostJpy = minutes ? Math.round(minutes * 4) : null;
+  const estCostJpy = episode.duration
+    ? estimateTranscribeCostJpy(episode.duration)
+    : null;
 
   return (
     <Section
