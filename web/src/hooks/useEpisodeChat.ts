@@ -51,6 +51,14 @@ export function useEpisodeChat(episodeId: string): UseEpisodeChatResult {
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // React 18 batches setState updaters into the next render, so reading
+  // updated state synchronously after setMessages doesn't work. Mirror
+  // messages into a ref so send() can build the request body from the
+  // latest snapshot.
+  const messagesRef = useRef<ChatMessage[]>(messages);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   // Reload when episode changes (mounted under different episode)
   useEffect(() => {
@@ -104,12 +112,11 @@ export function useEpisodeChat(episodeId: string): UseEpisodeChatResult {
         content: trimmed,
       };
       const assistantId = crypto.randomUUID();
-
-      let history: ChatMessage[] = [];
-      setMessages((prev) => {
-        history = [...prev, userMsg];
-        return [...history, { id: assistantId, role: "assistant", content: "" }];
-      });
+      const history = [...messagesRef.current, userMsg];
+      setMessages([
+        ...history,
+        { id: assistantId, role: "assistant", content: "" },
+      ]);
       setIsStreaming(true);
 
       const ctrl = new AbortController();
