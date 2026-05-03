@@ -1,5 +1,7 @@
 import { MessageSquare, Send, Sparkles, Square } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { Episode } from "@podcast-llm/shared";
 import { Section } from "@/components/episode/Section";
 import { Button } from "@/components/ui/button";
@@ -75,14 +77,37 @@ export function ChatSection({ episodeId, episode }: Props) {
               >
                 <div
                   className={cn(
-                    "rounded-2xl px-4 py-2.5 text-sm max-w-[85%] whitespace-pre-line leading-relaxed",
+                    "rounded-2xl px-4 py-2.5 text-sm max-w-[85%] leading-relaxed",
                     m.role === "user"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-secondary text-secondary-foreground",
+                      ? "bg-primary text-primary-foreground whitespace-pre-line"
+                      : "bg-secondary text-secondary-foreground prose-chat",
                   )}
                 >
-                  {m.content ||
-                    (isStreaming && m.role === "assistant" ? "…" : "")}
+                  {m.role === "user" ? (
+                    m.content
+                  ) : m.content ? (
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        a: ({ children, href }) => (
+                          <a
+                            href={href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary underline underline-offset-2 break-all"
+                          >
+                            {children}
+                          </a>
+                        ),
+                      }}
+                    >
+                      {m.content}
+                    </ReactMarkdown>
+                  ) : isStreaming ? (
+                    "…"
+                  ) : (
+                    ""
+                  )}
                 </div>
               </div>
             ))}
