@@ -84,9 +84,14 @@ export const audioProxy = onRequest(
       const cr = upstream.headers.get("content-range");
       const ar = upstream.headers.get("accept-ranges");
       res.setHeader("Content-Type", ct);
-      if (cl) res.setHeader("Content-Length", cl);
+      // 重要: Cloud Run は Content-Length 付き response を buffer して返そうと
+      // するため 32MB cap に引っかかる。chunked transfer にして streaming のまま
+      // 流すために Content-Length は付けない。生サイズはカスタムヘッダで
+      // クライアント側に渡し、progress 表示に使う。
+      if (cl) res.setHeader("X-Audio-Size", cl);
       if (cr) res.setHeader("Content-Range", cr);
       if (ar) res.setHeader("Accept-Ranges", ar);
+      res.setHeader("Access-Control-Expose-Headers", "X-Audio-Size, Content-Range, Accept-Ranges");
       res.setHeader("Cache-Control", "private, max-age=3600");
       res.status(upstream.status);
 

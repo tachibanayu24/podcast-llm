@@ -45,7 +45,11 @@ export async function downloadAudio(
   if (!res.ok || !res.body) {
     throw new Error(`download failed: ${res.status}`);
   }
-  const total = Number(res.headers.get("content-length") ?? "0");
+  // Cloud Run の 32MB cap 回避のため proxy は chunked で返す。
+  // 生サイズはカスタムヘッダ(X-Audio-Size)経由で渡される。
+  const total = Number(
+    res.headers.get("x-audio-size") ?? res.headers.get("content-length") ?? "0",
+  );
   const reader = res.body.getReader();
   const chunks: Uint8Array[] = [];
   let loaded = 0;
