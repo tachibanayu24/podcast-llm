@@ -30,7 +30,7 @@ function pricingOf(model: string): ModelPricing {
 /** 文字起こしコストの事前見積 (durationSec のみで概算)。 */
 export function estimateTranscribeCostUsd(
   durationSec: number,
-  model = "gemini-2.5-flash-lite",
+  model = "gemini-2.5-flash",
 ): number {
   if (!durationSec || durationSec <= 0) return 0;
   const p = pricingOf(model);
