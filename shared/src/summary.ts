@@ -1,3 +1,5 @@
+import type { UsageMeta } from "./transcript.js";
+
 export interface SummaryDoc {
   episodeId: string;
   tldr: string;
@@ -8,6 +10,7 @@ export interface SummaryDoc {
   model: string;
   contextTier: "transcript" | "shownotes" | "minimal";
   generatedAt: number;
+  usage?: UsageMeta;
 }
 
 export interface TranslationDoc {
@@ -18,4 +21,5 @@ export interface TranslationDoc {
   segments?: { start: number; text: string }[];
   model: string;
   generatedAt: number;
+  usage?: UsageMeta;
 }

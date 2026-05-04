@@ -4,12 +4,34 @@ import { logger } from "firebase-functions/v2";
 import { z } from "zod";
 import { db } from "./lib/admin.js";
 import { getVertex, MODELS } from "./lib/ai.js";
+import { actualCostUsd } from "./lib/cost.js";
 import type {
   Episode,
   SummaryDoc,
   TranscriptDoc,
   TranslationDoc,
+  UsageMeta,
 } from "./lib/types.js";
+
+interface UsageAccumulator {
+  inputTokens: number;
+  outputTokens: number;
+}
+function addUsage(
+  acc: UsageAccumulator,
+  u: { inputTokens?: number; outputTokens?: number } | undefined,
+): void {
+  if (!u) return;
+  acc.inputTokens += u.inputTokens ?? 0;
+  acc.outputTokens += u.outputTokens ?? 0;
+}
+function toUsageMeta(model: string, acc: UsageAccumulator): UsageMeta {
+  return {
+    inputTokens: acc.inputTokens,
+    outputTokens: acc.outputTokens,
+    costUsd: actualCostUsd(model, acc),
+  };
+}
 
 const SEGMENT_BATCH = 80;
 
@@ -46,6 +68,7 @@ export const translateSummary = onCall<
     );
 
     try {
+      const usageAcc: UsageAccumulator = { inputTokens: 0, outputTokens: 0 };
       let translation: TranslationDoc;
       if (kind === "summary") {
         const snap = await db.doc(`users/${uid}/summaries/${episodeId}`).get();
@@ -61,14 +84,21 @@ export const translateSummary = onCall<
           ...summary.keyPoints.map((p) => `- ${p}`),
         ].join("\n");
 
-        const text = await translateText(ep, source, "summary", targetLanguage);
+        const result = await translateText(
+          ep,
+          source,
+          "summary",
+          targetLanguage,
+        );
+        addUsage(usageAcc, result.usage);
         translation = {
           episodeId,
           kind: "summary",
           targetLanguage,
-          text,
+          text: result.text,
           model: MODELS.fast,
           generatedAt: Date.now(),
+          usage: toUsageMeta(MODELS.fast, usageAcc),
         };
       } else {
         const snap = await db
@@ -89,6 +119,7 @@ export const translateSummary = onCall<
           const translatedSegments = await translateSegments(
             inputs,
             targetLanguage,
+            usageAcc,
           );
           const text = translatedSegments.map((s) => s.text).join("\n");
           translation = {
@@ -99,22 +130,25 @@ export const translateSummary = onCall<
             segments: translatedSegments,
             model: MODELS.fast,
             generatedAt: Date.now(),
+            usage: toUsageMeta(MODELS.fast, usageAcc),
           };
         } else {
           // Plain text transcript only — single full-text translation.
-          const text = await translateText(
+          const result = await translateText(
             ep,
             t.text,
             "transcript",
             targetLanguage,
           );
+          addUsage(usageAcc, result.usage);
           translation = {
             episodeId,
             kind: "transcript",
             targetLanguage,
-            text,
+            text: result.text,
             model: MODELS.fast,
             generatedAt: Date.now(),
+            usage: toUsageMeta(MODELS.fast, usageAcc),
           };
         }
       }
@@ -126,6 +160,9 @@ export const translateSummary = onCall<
         kind,
         targetLanguage,
         textLength: translation.text.length,
+        inputTokens: usageAcc.inputTokens,
+        outputTokens: usageAcc.outputTokens,
+        costUsd: translation.usage?.costUsd,
       });
       return { ok: true };
     } catch (err) {
@@ -142,10 +179,10 @@ async function translateText(
   source: string,
   kind: "summary" | "transcript",
   target: string,
-): Promise<string> {
+): Promise<{ text: string; usage: { inputTokens?: number; outputTokens?: number } | undefined }> {
   const lang = target === "ja" ? "日本語" : target === "en" ? "英語" : target;
   const vertex = getVertex();
-  const { text } = await generateText({
+  const { text, usage } = await generateText({
     model: vertex(MODELS.fast),
     prompt: [
       `次の${kind === "summary" ? "ポッドキャストの要約" : "ポッドキャストの文字起こし"}を${lang}に翻訳してください。`,
@@ -159,12 +196,13 @@ async function translateText(
       "翻訳のみ出力してください。前置きや解説は不要です。",
     ].join("\n"),
   });
-  return text.trim();
+  return { text: text.trim(), usage };
 }
 
 async function translateSegments(
   segments: { start: number; text: string }[],
   target: string,
+  usageAcc: UsageAccumulator,
 ): Promise<{ start: number; text: string }[]> {
   const lang = target === "ja" ? "日本語" : target === "en" ? "英語" : target;
   const vertex = getVertex();
@@ -182,7 +220,7 @@ async function translateSegments(
     const items = batch.map((s, j) => ({ index: j + 1, text: s.text }));
 
     try {
-      const { object } = await generateObject({
+      const { object, usage } = await generateObject({
         model: vertex(MODELS.fast),
         schema: segmentSchema,
         prompt: [
@@ -194,6 +232,7 @@ async function translateSegments(
         ].join("\n"),
         maxRetries: 1,
       });
+      addUsage(usageAcc, usage);
 
       const map = new Map<number, string>();
       for (const it of object.items) {

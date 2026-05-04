@@ -4,6 +4,7 @@ import { logger } from "firebase-functions/v2";
 import { z } from "zod";
 import { db } from "./lib/admin.js";
 import { getVertex, MODELS } from "./lib/ai.js";
+import { actualCostUsd } from "./lib/cost.js";
 import { formatTs } from "./lib/format.js";
 import type { Episode, SummaryDoc, TranscriptDoc } from "./lib/types.js";
 
@@ -104,6 +105,7 @@ export const summarizeEpisode = onCall<
           ? undefined
           : object.generatedChapters;
 
+      const costUsd = actualCostUsd(MODELS.fast, usage);
       const summary: SummaryDoc = {
         episodeId,
         tldr: object.tldr,
@@ -116,6 +118,11 @@ export const summarizeEpisode = onCall<
         model: MODELS.fast,
         contextTier: tier,
         generatedAt: Date.now(),
+        usage: {
+          inputTokens: usage?.inputTokens ?? 0,
+          outputTokens: usage?.outputTokens ?? 0,
+          costUsd,
+        },
       };
 
       await db.doc(`users/${uid}/summaries/${episodeId}`).set(summary);
@@ -154,6 +161,7 @@ export const summarizeEpisode = onCall<
         durationMs: Date.now() - startedAt,
         inputTokens: usage?.inputTokens,
         outputTokens: usage?.outputTokens,
+        costUsd,
       });
       return { ok: true, tier };
     } catch (err) {

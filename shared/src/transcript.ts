@@ -1,5 +1,11 @@
 import type { TranscriptSource } from "./episode.js";
 
+export interface UsageMeta {
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+}
+
 export interface TranscriptSegment {
   start: number; // seconds
   end?: number;
@@ -14,4 +20,6 @@ export interface TranscriptDoc {
   text: string;
   segments?: TranscriptSegment[];
   generatedAt: number;
+  model?: string;
+  usage?: UsageMeta;
 }
