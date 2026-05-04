@@ -7,10 +7,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatUsd } from "@/lib/cost";
+import { estimateTranscribeCostUsd, formatUsd } from "@/lib/cost";
 import { getSummary, getTranslation } from "@/lib/episodes";
 import { friendlyError } from "@/lib/errors";
-import { summarizeEpisodeFn, translateSummaryFn } from "@/lib/functions";
+import {
+  summarizeEpisodeFn,
+  transcribeEpisodeFn,
+  translateSummaryFn,
+} from "@/lib/functions";
 
 interface Props {
   episodeId: string;
@@ -25,11 +29,30 @@ export function SummarySection({ episodeId, episode, hideTitle }: Props) {
     queryFn: () => getSummary(episodeId),
   });
 
+  const [phase, setPhase] = useState<"idle" | "transcribing" | "summarizing">(
+    "idle",
+  );
+
+  // 文字起こしが無いと要約はハルシネーションが乗りやすいので、
+  // 必要に応じて先に文字起こしを生成してから要約する一連フロー。
   const generate = useMutation({
-    mutationFn: () =>
-      summarizeEpisodeFn({ episodeId }).then((r) => r.data),
+    mutationFn: async () => {
+      const needTranscript =
+        episode.transcript?.status !== "done" && !!episode.audioUrl;
+      if (needTranscript) {
+        setPhase("transcribing");
+        await transcribeEpisodeFn({ episodeId });
+      }
+      setPhase("summarizing");
+      const r = await summarizeEpisodeFn({ episodeId });
+      return r.data;
+    },
+    onSettled: () => {
+      setPhase("idle");
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["summary", episodeId] });
+      queryClient.invalidateQueries({ queryKey: ["transcript", episodeId] });
       queryClient.invalidateQueries({ queryKey: ["episode", episodeId] });
     },
   });
@@ -141,46 +164,79 @@ export function SummarySection({ episodeId, episode, hideTitle }: Props) {
       {!summary && episode.summary?.status === "pending" && (
         <Card className="p-6 text-center space-y-2">
           <p className="text-sm text-muted-foreground">
-            生成中です。1〜数分かかります…
+            要約を生成中です…
           </p>
           <p className="text-xs text-muted-foreground">
             画面を閉じても処理は続きます。完了後に開けば結果が反映されます。
           </p>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => generate.mutate()}
-            className="text-xs text-muted-foreground"
-          >
-            やり直す
-          </Button>
         </Card>
       )}
 
-      {!summary && episode.summary?.status !== "pending" && (
-        <Card className="p-6 text-center space-y-3">
-          <Sparkles className="size-6 text-muted-foreground mx-auto" />
-          <div className="space-y-1">
-            <p className="text-sm font-medium">要約を生成</p>
-            <p className="text-xs text-muted-foreground">
-              文字起こし・チャプター・Show Notesから要約とポイントを生成します。
-            </p>
-          </div>
-          <Button
-            variant="gradient"
-            size="sm"
-            onClick={() => generate.mutate()}
-            disabled={generate.isPending}
-          >
-            {generate.isPending ? "生成中…" : "AIで要約を生成"}
-          </Button>
-          {generate.isError && (
-            <p className="text-xs text-destructive">
-              {friendlyError(generate.error)}
-            </p>
-          )}
-        </Card>
-      )}
+      {!summary &&
+        episode.summary?.status !== "pending" &&
+        (() => {
+          const hasTranscript = episode.transcript?.status === "done";
+          const transcribing =
+            phase === "transcribing" ||
+            episode.transcript?.status === "pending";
+          const summarizing = phase === "summarizing";
+          const audioMins = episode.duration
+            ? Math.round(episode.duration / 60)
+            : null;
+          const transcribeCost = episode.duration
+            ? estimateTranscribeCostUsd(episode.duration, "gemini-2.5-flash")
+            : 0;
+
+          return (
+            <Card className="p-6 text-center space-y-3">
+              <Sparkles className="size-6 text-muted-foreground mx-auto" />
+              <div className="space-y-1">
+                <p className="text-sm font-medium">要約を生成</p>
+                {hasTranscript ? (
+                  <p className="text-xs text-muted-foreground">
+                    文字起こし・チャプター・Show Notesから要約を生成します。
+                  </p>
+                ) : episode.audioUrl ? (
+                  <p className="text-xs text-muted-foreground">
+                    精度確保のため、まず文字起こしを生成してから要約します
+                    {audioMins
+                      ? `(約${audioMins}分・推定${formatUsd(transcribeCost)})`
+                      : ""}
+                    。
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    音声が無いため、Show Notes から要約します。
+                  </p>
+                )}
+              </div>
+              <Button
+                variant="gradient"
+                size="sm"
+                onClick={() => generate.mutate()}
+                disabled={generate.isPending}
+              >
+                {transcribing
+                  ? "文字起こし中…"
+                  : summarizing
+                    ? "要約中…"
+                    : hasTranscript || !episode.audioUrl
+                      ? "AIで要約を生成"
+                      : "文字起こし → 要約 を生成"}
+              </Button>
+              {(transcribing || summarizing) && (
+                <p className="text-xs text-muted-foreground">
+                  画面を閉じても処理は続きます。完了後に開けば結果が反映されます。
+                </p>
+              )}
+              {generate.isError && (
+                <p className="text-xs text-destructive">
+                  {friendlyError(generate.error)}
+                </p>
+              )}
+            </Card>
+          );
+        })()}
 
       {summary && (
         <Card className="p-5 space-y-4">
