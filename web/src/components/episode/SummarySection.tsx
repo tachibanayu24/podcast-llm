@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatUsd } from "@/lib/cost";
 import { getSummary, getTranslation } from "@/lib/episodes";
 import { friendlyError } from "@/lib/errors";
 import { summarizeEpisodeFn, translateSummaryFn } from "@/lib/functions";
@@ -14,9 +15,10 @@ import { summarizeEpisodeFn, translateSummaryFn } from "@/lib/functions";
 interface Props {
   episodeId: string;
   episode: Episode;
+  hideTitle?: boolean;
 }
 
-export function SummarySection({ episodeId, episode }: Props) {
+export function SummarySection({ episodeId, episode, hideTitle }: Props) {
   const queryClient = useQueryClient();
   const summaryQuery = useQuery({
     queryKey: ["summary", episodeId],
@@ -58,7 +60,11 @@ export function SummarySection({ episodeId, episode }: Props) {
 
   if (summaryQuery.isLoading) {
     return (
-      <Section title="要約" icon={<StickyNote className="size-5" />}>
+      <Section
+        title="要約"
+        icon={<StickyNote className="size-5" />}
+        hideTitle={hideTitle}
+      >
         <Skeleton className="h-24 w-full" />
       </Section>
     );
@@ -68,9 +74,33 @@ export function SummarySection({ episodeId, episode }: Props) {
     <Section
       title="要約"
       icon={<StickyNote className="size-5" />}
+      hideTitle={hideTitle}
       action={
         summary && (
           <div className="flex items-center gap-2">
+            {(() => {
+              const summaryCost = summary.usage?.costUsd ?? 0;
+              const translationCost =
+                showJa && translation.data?.usage?.costUsd
+                  ? translation.data.usage.costUsd
+                  : 0;
+              const totalCost = summaryCost + translationCost;
+              if (totalCost <= 0) return null;
+              const inputTokens =
+                (summary.usage?.inputTokens ?? 0) +
+                (showJa ? translation.data?.usage?.inputTokens ?? 0 : 0);
+              const outputTokens =
+                (summary.usage?.outputTokens ?? 0) +
+                (showJa ? translation.data?.usage?.outputTokens ?? 0 : 0);
+              return (
+                <span
+                  className="text-[10px] tabular-nums text-muted-foreground"
+                  title={`実コスト見積 ${formatUsd(totalCost)} (in: ${inputTokens.toLocaleString()} / out: ${outputTokens.toLocaleString()} tokens)`}
+                >
+                  {formatUsd(totalCost)}
+                </span>
+              );
+            })()}
             {!isJapanese && (
               <Button
                 variant="ghost"

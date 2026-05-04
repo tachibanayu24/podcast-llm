@@ -1,37 +1,51 @@
 /**
- * 文字起こし/要約のコスト見積もり (JPY)。
+ * AI 利用コスト計算 / 表示 (USD)。
  *
- * 価格は Vertex AI 公式の標準料金 (バッチ非適用) を採用。
- * モデルや為替レートが変わったらここを更新する。
- * https://cloud.google.com/vertex-ai/generative-ai/pricing
+ * - 価格は Vertex AI 標準料金 (バッチ非適用)。
+ *   https://cloud.google.com/vertex-ai/generative-ai/pricing
+ * - 100% 正確な実料金ではなく "見積もり"。usage に audio/text の内訳が無いため
+ *   音声入力タスクは durationSec から audio token を推定する近似式を使う。
  */
 
-// USD → JPY 換算 (おおまかな目安)
-const USD_TO_JPY = 155;
+interface ModelPricing {
+  textIn: number;
+  audioIn: number;
+  textOut: number;
+}
 
-// Gemini 2.5 Flash (Vertex AI 標準料金)
-const FLASH_AUDIO_INPUT_USD_PER_M = 1.0;
-const FLASH_TEXT_OUTPUT_USD_PER_M = 2.5;
+// USD per 1M tokens
+const PRICING: Record<string, ModelPricing> = {
+  "gemini-2.5-flash": { textIn: 0.3, audioIn: 1.0, textOut: 2.5 },
+  "gemini-2.5-pro": { textIn: 1.25, audioIn: 1.25, textOut: 10.0 },
+  "gemini-2.5-flash-lite": { textIn: 0.1, audioIn: 0.3, textOut: 0.4 },
+};
 
-// 音声の token 換算: 25 tokens / 秒 (Vertex AI の audio tokenization 既定)
-const AUDIO_TOKENS_PER_SEC = 25;
-
-// 文字起こし出力の経験値: 日本語/英語 podcast で 1 秒あたり ~10 output tokens
-// (=毎分 ~600 tokens、60分エピソードで ~36k tokens)
+const AUDIO_TOKENS_PER_SEC = 32;
 const OUTPUT_TOKENS_PER_SEC = 10;
 
-/**
- * Gemini 2.5 Flash で文字起こしした場合の概算 (JPY)。
- * 1円未満は切り上げ。
- */
-export function estimateTranscribeCostJpy(durationSec: number): number {
+function pricingOf(model: string): ModelPricing {
+  return PRICING[model] ?? PRICING["gemini-2.5-flash"]!;
+}
+
+/** 文字起こしコストの事前見積 (durationSec のみで概算)。 */
+export function estimateTranscribeCostUsd(
+  durationSec: number,
+  model = "gemini-2.5-flash-lite",
+): number {
   if (!durationSec || durationSec <= 0) return 0;
-  const inputTokens = durationSec * AUDIO_TOKENS_PER_SEC;
+  const p = pricingOf(model);
+  const audioTokens = durationSec * AUDIO_TOKENS_PER_SEC;
   const outputTokens = durationSec * OUTPUT_TOKENS_PER_SEC;
-  const usd =
-    (inputTokens * FLASH_AUDIO_INPUT_USD_PER_M +
-      outputTokens * FLASH_TEXT_OUTPUT_USD_PER_M) /
-    1_000_000;
-  const jpy = usd * USD_TO_JPY;
-  return Math.max(1, Math.ceil(jpy));
+  return (audioTokens * p.audioIn + outputTokens * p.textOut) / 1_000_000;
+}
+
+/**
+ * USD 金額のフォーマット。微小金額は cents、それ以下はミルセント単位で表示する。
+ */
+export function formatUsd(usd: number): string {
+  if (!usd || usd <= 0) return "$0";
+  if (usd < 0.001) return "<$0.001";
+  if (usd < 1) return `$${usd.toFixed(3)}`;
+  if (usd < 100) return `$${usd.toFixed(2)}`;
+  return `$${usd.toFixed(1)}`;
 }

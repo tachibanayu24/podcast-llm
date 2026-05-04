@@ -5,16 +5,17 @@ import { Card } from "@/components/ui/card";
 
 interface Props {
   episode: Episode;
+  hideTitle?: boolean;
 }
 
-export function ShowNotesSection({ episode }: Props) {
+export function ShowNotesSection({ episode, hideTitle }: Props) {
   if (!episode.showNotes && !episode.description) return null;
   const html = episode.showNotes?.html ?? episode.description ?? "";
   const text = episode.showNotes?.text ?? "";
   const hasHtml = /<[a-z][\s\S]*>/i.test(html);
 
   return (
-    <Section title="エピソードについて">
+    <Section title="エピソードについて" hideTitle={hideTitle}>
       <Card className="p-5">
         {hasHtml ? (
           <SanitizedHtml html={html} className="prose-podcast" />

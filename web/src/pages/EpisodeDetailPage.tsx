@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
 import { ChevronLeft } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChaptersSection } from "@/components/episode/ChaptersSection";
 import { ChatSection } from "@/components/episode/ChatSection";
 import { Hero } from "@/components/episode/Hero";
@@ -9,6 +9,7 @@ import { ShowNotesSection } from "@/components/episode/ShowNotesSection";
 import { SummarySection } from "@/components/episode/SummarySection";
 import { TranscriptSection } from "@/components/episode/TranscriptSection";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getEpisode, getSummary, getTranscript } from "@/lib/episodes";
 import { getEpisodeContextFn } from "@/lib/functions";
 import { getPodcast } from "@/lib/podcasts";
@@ -61,6 +62,33 @@ export function EpisodeDetailPage() {
   }, [episodeQuery.data?.id]);
 
   const episode = episodeQuery.data;
+  const podcast = podcastQuery.data ?? null;
+  const transcript = transcriptQuery.data ?? null;
+  const summary = summaryQuery.data ?? null;
+
+  const hasChapters = !!episode?.chapters && episode.chapters.length > 0;
+  const hasNotes = !!episode?.showNotes || !!episode?.description;
+  const hasChat = !!summary;
+
+  const tabs = useMemo(
+    () =>
+      [
+        { value: "summary", label: "要約", visible: true },
+        { value: "transcript", label: "文字起こし", visible: true },
+        { value: "chapters", label: "チャプター", visible: hasChapters },
+        { value: "notes", label: "概要", visible: hasNotes },
+        { value: "chat", label: "AIに質問", visible: hasChat },
+      ].filter((t) => t.visible),
+    [hasChapters, hasNotes, hasChat],
+  );
+
+  const [active, setActive] = useState<string>(() => tabs[0]?.value ?? "summary");
+  // タブ可視性が変わったとき、現在の active が消えたら先頭にフォールバック。
+  useEffect(() => {
+    if (!tabs.some((t) => t.value === active)) {
+      setActive(tabs[0]?.value ?? "summary");
+    }
+  }, [tabs, active]);
 
   if (episodeQuery.isLoading) return <DetailSkeleton />;
   if (!episode) {
@@ -72,36 +100,58 @@ export function EpisodeDetailPage() {
     );
   }
 
-  const podcast = podcastQuery.data ?? null;
-  const transcript = transcriptQuery.data ?? null;
-  const summary = summaryQuery.data ?? null;
-
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <BackLink podcastId={episode.podcastId} />
 
       <Hero episode={episode} podcast={podcast} />
 
-      <SummarySection episodeId={id} episode={episode} />
+      <Tabs value={active} onValueChange={setActive}>
+        <TabsList className="overflow-x-auto max-w-full justify-start no-scrollbar">
+          {tabs.map((t) => (
+            <TabsTrigger key={t.value} value={t.value}>
+              {t.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
-      {episode.chapters && episode.chapters.length > 0 && (
-        <ChaptersSection
-          chapters={episode.chapters}
-          episode={episode}
-          source={episode.chaptersSource}
-        />
-      )}
+        <TabsContent value="summary">
+          <SummarySection episodeId={id} episode={episode} hideTitle />
+        </TabsContent>
 
-      <ShowNotesSection episode={episode} />
+        <TabsContent value="transcript">
+          <TranscriptSection
+            episodeId={id}
+            episode={episode}
+            transcript={transcript}
+            loading={contextMutation.isPending && !transcript}
+            hideTitle
+          />
+        </TabsContent>
 
-      <TranscriptSection
-        episodeId={id}
-        episode={episode}
-        transcript={transcript}
-        loading={contextMutation.isPending && !transcript}
-      />
+        {hasChapters && (
+          <TabsContent value="chapters">
+            <ChaptersSection
+              chapters={episode.chapters!}
+              episode={episode}
+              source={episode.chaptersSource}
+              hideTitle
+            />
+          </TabsContent>
+        )}
 
-      {summary && <ChatSection episodeId={id} episode={episode} />}
+        {hasNotes && (
+          <TabsContent value="notes">
+            <ShowNotesSection episode={episode} hideTitle />
+          </TabsContent>
+        )}
+
+        {hasChat && (
+          <TabsContent value="chat">
+            <ChatSection episodeId={id} episode={episode} hideTitle />
+          </TabsContent>
+        )}
+      </Tabs>
     </div>
   );
 }

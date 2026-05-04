@@ -1,4 +1,4 @@
-import { MessageSquare, Send, Sparkles, Square } from "lucide-react";
+import { Send, Sparkles, Square } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -12,9 +12,10 @@ import { cn } from "@/lib/utils";
 interface Props {
   episodeId: string;
   episode: Episode;
+  hideTitle?: boolean;
 }
 
-export function ChatSection({ episodeId, episode }: Props) {
+export function ChatSection({ episodeId, episode, hideTitle }: Props) {
   const { messages, send, stop, isStreaming, error } = useEpisodeChat(episodeId);
   const [input, setInput] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
@@ -49,7 +50,7 @@ export function ChatSection({ episodeId, episode }: Props) {
   const placeholder = `「${episode.title}」について質問してみる…`;
 
   return (
-    <Section title="QA チャット" icon={<MessageSquare className="size-5" />}>
+    <Section title="AIに質問" hideTitle={hideTitle}>
       <Card className="overflow-hidden">
         {messages.length === 0 ? (
           <div className="px-5 py-8 text-center space-y-2 text-sm text-muted-foreground">

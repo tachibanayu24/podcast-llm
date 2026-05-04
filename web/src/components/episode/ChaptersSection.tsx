@@ -1,4 +1,3 @@
-import { ListMusic } from "lucide-react";
 import type { Chapter, Episode } from "@podcast-llm/shared";
 import { Section } from "@/components/episode/Section";
 import { Badge } from "@/components/ui/badge";
@@ -11,9 +10,10 @@ interface Props {
   chapters: Chapter[];
   episode: Episode;
   source?: Episode["chaptersSource"];
+  hideTitle?: boolean;
 }
 
-export function ChaptersSection({ chapters, episode, source }: Props) {
+export function ChaptersSection({ chapters, episode, source, hideTitle }: Props) {
   const seek = usePlayerStore((s) => s.seek);
   const loadAndSeek = usePlayerStore((s) => s.loadAndSeek);
   const currentId = usePlayerStore((s) => s.episode?.id);
@@ -33,8 +33,8 @@ export function ChaptersSection({ chapters, episode, source }: Props) {
   return (
     <Section
       title="チャプター"
-      icon={<ListMusic className="size-5" />}
       action={source && <ChapterSourceBadge source={source} />}
+      hideTitle={hideTitle}
     >
       <Card className="divide-y divide-border overflow-hidden">
         {chapters.map((c, i) => {

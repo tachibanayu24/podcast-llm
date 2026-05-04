@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { estimateTranscribeCostJpy } from "@/lib/cost";
+import { estimateTranscribeCostUsd, formatUsd } from "@/lib/cost";
 import { friendlyError } from "@/lib/errors";
 import { formatTimestamp } from "@/lib/format";
 import { transcribeEpisodeFn } from "@/lib/functions";
@@ -18,6 +18,7 @@ interface Props {
   episode: Episode;
   transcript: TranscriptDoc | null;
   loading: boolean;
+  hideTitle?: boolean;
 }
 
 export function TranscriptSection({
@@ -25,6 +26,7 @@ export function TranscriptSection({
   episode,
   transcript,
   loading,
+  hideTitle,
 }: Props) {
   const queryClient = useQueryClient();
   const seek = usePlayerStore((s) => s.seek);
@@ -47,21 +49,32 @@ export function TranscriptSection({
   }
 
   const minutes = episode.duration ? Math.round(episode.duration / 60) : null;
-  const estCostJpy = episode.duration
-    ? estimateTranscribeCostJpy(episode.duration)
+  const estCostUsd = episode.duration
+    ? estimateTranscribeCostUsd(episode.duration)
     : null;
 
   return (
     <Section
       title="文字起こし"
+      hideTitle={hideTitle}
       action={
         transcript?.source && (
-          <Badge
-            variant="outline"
-            className="text-[10px] uppercase tracking-wider"
-          >
-            {transcript.source === "rss" ? "RSS" : "AI"}
-          </Badge>
+          <div className="flex items-center gap-1.5">
+            {transcript.usage && transcript.usage.costUsd > 0 && (
+              <span
+                className="text-[10px] tabular-nums text-muted-foreground"
+                title={`実コスト見積 ${formatUsd(transcript.usage.costUsd)} (in: ${transcript.usage.inputTokens.toLocaleString()} / out: ${transcript.usage.outputTokens.toLocaleString()} tokens)`}
+              >
+                {formatUsd(transcript.usage.costUsd)}
+              </span>
+            )}
+            <Badge
+              variant="outline"
+              className="text-[10px] uppercase tracking-wider"
+            >
+              {transcript.source === "rss" ? "RSS" : "AI"}
+            </Badge>
+          </div>
         )
       }
     >
@@ -74,8 +87,8 @@ export function TranscriptSection({
             <p className="text-sm font-medium">文字起こしがありません</p>
             <p className="text-xs text-muted-foreground">
               RSSに含まれていないため、AIで生成できます
-              {minutes && estCostJpy
-                ? `(約${minutes}分・推定${estCostJpy}円)`
+              {minutes && estCostUsd
+                ? `(約${minutes}分・推定${formatUsd(estCostUsd)})`
                 : ""}
               。
             </p>
@@ -117,42 +130,44 @@ export function TranscriptSection({
         transcript.segments &&
         transcript.segments.length > 0 && (
           <Card className="p-4 max-h-[60vh] overflow-y-auto">
-            <ol className="space-y-2.5">
+            <ol className="space-y-1">
               {transcript.segments.map((s, i) => {
                 const active =
                   currentId === episode.id &&
                   s.start <= position &&
                   position < (s.end ?? s.start + 60);
                 return (
-                  <li
-                    key={i}
-                    className={cn(
-                      "flex gap-3 items-start",
-                      active && "bg-primary/5 -mx-2 px-2 py-1 rounded",
-                    )}
-                  >
+                  <li key={i}>
                     <button
                       type="button"
                       onClick={() => jump(s.start)}
                       className={cn(
-                        "text-xs font-mono tabular-nums shrink-0 mt-0.5 w-14 text-left transition-colors",
+                        "w-full flex gap-3 items-start text-left -mx-2 px-2 py-1.5 rounded transition-colors",
                         active
-                          ? "text-primary"
-                          : "text-muted-foreground hover:text-foreground",
+                          ? "bg-primary/5"
+                          : "hover:bg-muted/50",
                       )}
+                      aria-label={`${formatTimestamp(s.start)} から再生`}
                     >
-                      {formatTimestamp(s.start)}
-                    </button>
-                    <div className="flex-1 text-sm leading-relaxed">
-                      {s.speaker && (
-                        <span className="text-xs font-semibold text-muted-foreground mr-2">
-                          {s.speaker}
-                        </span>
-                      )}
-                      <span className={active ? "font-medium" : ""}>
-                        {s.text}
+                      <span
+                        className={cn(
+                          "text-xs font-mono tabular-nums shrink-0 mt-0.5 w-14",
+                          active ? "text-primary" : "text-muted-foreground",
+                        )}
+                      >
+                        {formatTimestamp(s.start)}
                       </span>
-                    </div>
+                      <span className="flex-1 text-sm leading-relaxed">
+                        {s.speaker && (
+                          <span className="text-xs font-semibold text-muted-foreground mr-2">
+                            {s.speaker}
+                          </span>
+                        )}
+                        <span className={active ? "font-medium" : ""}>
+                          {s.text}
+                        </span>
+                      </span>
+                    </button>
                   </li>
                 );
               })}
