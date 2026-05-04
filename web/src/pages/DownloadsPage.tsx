@@ -1,21 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ChevronLeft, Download, Pause, Play, Trash2 } from "lucide-react";
-import { useMemo } from "react";
 import type { Episode, Podcast } from "@podcast-llm/shared";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getEpisode } from "@/lib/episodes";
 import { friendlyError } from "@/lib/errors";
 import { formatBytes, formatDate, formatDuration } from "@/lib/format";
 import {
-  type OfflineEntry,
   deleteAllOffline,
   deleteOffline,
   listOfflineEntries,
 } from "@/lib/offline";
-import { listSubscriptions } from "@/lib/podcasts";
 import { usePlayerStore } from "@/lib/player-store";
 import { cn } from "@/lib/utils";
 
@@ -28,45 +24,21 @@ interface Row {
 export function DownloadsPage() {
   const queryClient = useQueryClient();
 
-  const entriesQuery = useQuery({
-    queryKey: ["downloads", "entries"],
-    queryFn: () => listOfflineEntries(),
-  });
-
-  const podcastsQuery = useQuery({
-    queryKey: ["subscriptions"],
-    queryFn: () => listSubscriptions(),
-  });
-
-  const podcastById = useMemo(() => {
-    const map = new Map<string, Podcast>();
-    for (const p of podcastsQuery.data ?? []) map.set(p.id, p);
-    return map;
-  }, [podcastsQuery.data]);
-
+  // ダウンロード時にエピソード/番組メタも IndexedDB に同梱保存しているので
+  // この一覧はオフライン(機内モード)でもそのまま動く。
   const rowsQuery = useQuery({
-    queryKey: [
-      "downloads",
-      "rows",
-      entriesQuery.data?.map((e) => e.episodeId).join(","),
-    ],
+    queryKey: ["downloads", "rows"],
     queryFn: async (): Promise<Row[]> => {
-      const entries = entriesQuery.data ?? [];
-      const episodes = await Promise.all(
-        entries.map((e) =>
-          getEpisode(e.episodeId).then((ep) => ({ ep, entry: e })),
-        ),
-      );
-      return episodes
-        .filter((x): x is { ep: Episode; entry: OfflineEntry } => !!x.ep)
-        .map(({ ep, entry }) => ({
-          episode: ep,
-          podcast: podcastById.get(ep.podcastId) ?? null,
-          size: entry.size,
+      const entries = await listOfflineEntries();
+      return entries
+        .filter((e): e is typeof e & { episode: Episode } => !!e.episode)
+        .map((e) => ({
+          episode: e.episode,
+          podcast: e.podcast,
+          size: e.size,
         }))
         .sort((a, b) => b.episode.publishedAt - a.episode.publishedAt);
     },
-    enabled: !!entriesQuery.data,
   });
 
   const deleteOne = useMutation({
@@ -85,7 +57,7 @@ export function DownloadsPage() {
 
   const rows = rowsQuery.data;
   const totalBytes = (rows ?? []).reduce((sum, r) => sum + r.size, 0);
-  const isLoading = entriesQuery.isLoading || rowsQuery.isLoading;
+  const isLoading = rowsQuery.isLoading;
 
   function handleDeleteAll() {
     if (!confirm("ダウンロード済みエピソードを全て削除します。よろしいですか?"))

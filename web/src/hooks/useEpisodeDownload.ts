@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
+import type { Episode, Podcast } from "@podcast-llm/shared";
 import {
   type DownloadProgress,
   deleteOffline,
@@ -7,14 +8,14 @@ import {
   isDownloaded,
 } from "@/lib/offline";
 
-export function useEpisodeDownload(episodeId: string, audioUrl: string) {
+export function useEpisodeDownload(episode: Episode, podcast: Podcast | null) {
   const queryClient = useQueryClient();
   const [progress, setProgress] = useState<DownloadProgress | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const status = useQuery({
-    queryKey: ["offline", episodeId],
-    queryFn: () => isDownloaded(episodeId),
+    queryKey: ["offline", episode.id],
+    queryFn: () => isDownloaded(episode.id),
   });
 
   const download = useMutation({
@@ -22,21 +23,23 @@ export function useEpisodeDownload(episodeId: string, audioUrl: string) {
       const ctrl = new AbortController();
       abortRef.current = ctrl;
       setProgress({ loaded: 0, total: 0 });
-      await downloadAudio(episodeId, audioUrl, (p) => setProgress(p), ctrl.signal);
+      await downloadAudio(episode, podcast, (p) => setProgress(p), ctrl.signal);
     },
     onSettled: () => {
       abortRef.current = null;
       setProgress(null);
-      queryClient.invalidateQueries({ queryKey: ["offline", episodeId] });
-      queryClient.invalidateQueries({ queryKey: ["episode", episodeId] });
+      queryClient.invalidateQueries({ queryKey: ["offline", episode.id] });
+      queryClient.invalidateQueries({ queryKey: ["episode", episode.id] });
+      queryClient.invalidateQueries({ queryKey: ["downloads"] });
     },
   });
 
   const remove = useMutation({
-    mutationFn: () => deleteOffline(episodeId),
+    mutationFn: () => deleteOffline(episode.id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["offline", episodeId] });
-      queryClient.invalidateQueries({ queryKey: ["episode", episodeId] });
+      queryClient.invalidateQueries({ queryKey: ["offline", episode.id] });
+      queryClient.invalidateQueries({ queryKey: ["episode", episode.id] });
+      queryClient.invalidateQueries({ queryKey: ["downloads"] });
     },
   });
 

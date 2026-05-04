@@ -31,7 +31,7 @@ export function Hero({ episode, podcast }: Props) {
   const showPause = isCurrent && isPlaying;
 
   const watchlistMutation = useWatchlistToggle(episode);
-  const dl = useEpisodeDownload(episode.id, episode.audioUrl);
+  const dl = useEpisodeDownload(episode, podcast);
 
   function handlePlay() {
     if (isCurrent) toggle();
