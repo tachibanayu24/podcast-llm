@@ -137,9 +137,12 @@ export const transcribeEpisode = onCall<
         // Gemini 2.5 系は default で thinking が ON。長文 transcription のような
         // perception タスクでは思考トークンに output budget を食われて本体が
         // 空 response になる現象が起きるので明示的に 0 で無効化する。
+        // audioTimestamp: 音声入力に対してタイムスタンプ精度を上げる Vertex 側
+        // の専用フラグ。input token がやや増えるが segment.start のズレが減る。
         providerOptions: {
           vertex: {
             thinkingConfig: { thinkingBudget: 0 },
+            audioTimestamp: true,
           },
         },
         messages: [
@@ -161,6 +164,8 @@ export const transcribeEpisode = onCall<
                   "",
                   "## セグメント",
                   "- おおむね1〜2文ごとに区切り、各セグメントに開始秒(start)を付ける",
+                  "- start は **その発話が音声内で実際に始まる時刻(秒)** を正確に。推測ではなく音声を聞いて時刻を取ること",
+                  "- 同一話者で時刻が前のセグメントと逆転しないよう、必ず昇順にする",
                   "- フィラー(えーと、あの 等)は適度に整理してよいが、内容を勝手に省略しない",
                   "- 言語は元音声の言語のまま (ja の場合は日本語)",
                   "",
