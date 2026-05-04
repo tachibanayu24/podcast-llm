@@ -40,6 +40,12 @@ export interface ArtifactMeta {
   error?: string;
 }
 
+export interface UsageMeta {
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+}
+
 export interface Chapter {
   start: number;
   end?: number;
@@ -72,6 +78,8 @@ export interface TranscriptDoc {
   text: string;
   segments?: TranscriptSegment[];
   generatedAt: number;
+  model?: string;
+  usage?: UsageMeta;
 }
 
 export interface SummaryDoc {
@@ -84,6 +92,7 @@ export interface SummaryDoc {
   model: string;
   contextTier: "transcript" | "shownotes" | "minimal";
   generatedAt: number;
+  usage?: UsageMeta;
 }
 
 export interface TranslationDoc {
@@ -94,6 +103,7 @@ export interface TranslationDoc {
   segments?: { start: number; text: string }[];
   model: string;
   generatedAt: number;
+  usage?: UsageMeta;
 }
 
 export interface Episode {
@@ -126,4 +136,5 @@ export interface Episode {
 
   gcsUri?: string;
   gcsExpiresAt?: number;
+  gcsContentType?: string;
 }

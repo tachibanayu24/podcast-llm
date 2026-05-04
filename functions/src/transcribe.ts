@@ -3,9 +3,12 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
 import { z } from "zod";
 import { db } from "./lib/admin.js";
-import { getVertex, MODELS } from "./lib/ai.js";
+import { getVertexGlobal, MODELS } from "./lib/ai.js";
+import { actualAudioCostUsd } from "./lib/cost.js";
 import { ingestAudioToGcs } from "./lib/ingest.js";
-import type { Episode, TranscriptDoc } from "./lib/types.js";
+import type { Episode, Podcast, TranscriptDoc } from "./lib/types.js";
+
+const TRANSCRIBE_MODEL = MODELS.lite;
 
 const schema = z.object({
   language: z.string().describe("ISO 639-1 language code, e.g. 'ja' or 'en'"),
@@ -62,6 +65,7 @@ export const transcribeEpisode = onCall<
 
     let gcsUri = ep.gcsUri;
     let expiresAt = ep.gcsExpiresAt ?? 0;
+    let contentType = ep.gcsContentType;
 
     try {
       if (!gcsUri || expiresAt < Date.now() + 60_000) {
@@ -73,13 +77,70 @@ export const transcribeEpisode = onCall<
         );
         gcsUri = ingest.gcsUri;
         expiresAt = ingest.expiresAt;
-        await epRef.update({ gcsUri, gcsExpiresAt: expiresAt });
+        contentType = ingest.contentType;
+        await epRef.update({
+          gcsUri,
+          gcsExpiresAt: expiresAt,
+          gcsContentType: contentType,
+        });
       }
 
-      const vertex = getVertex();
-      const { object } = await generateObject({
-        model: vertex(MODELS.fast),
+      // 話者名を実名で当てさせるための手がかりを集める。
+      // 番組情報・出演者がわかる Show Notes・自己紹介がよく入っている冒頭の
+      // ヒントなどをまとめてプロンプトに同梱する。
+      const podcastSnap = await db.doc(`users/${uid}/podcasts/${ep.podcastId}`).get();
+      const podcast = podcastSnap.exists
+        ? (podcastSnap.data() as Podcast)
+        : null;
+
+      const speakerHints: string[] = [];
+      if (podcast?.title) speakerHints.push(`番組名: ${podcast.title}`);
+      if (podcast?.author) {
+        speakerHints.push(`番組オーナー/作者: ${podcast.author}`);
+      }
+      if (podcast?.description) {
+        // 番組概要にはホスト/レギュラー出演者の名前が書かれていることが多い。
+        speakerHints.push(
+          `番組概要(常連ホストやパーソナリティ名が含まれることが多い):\n${podcast.description.slice(0, 2000)}`,
+        );
+      }
+      if (ep.title) speakerHints.push(`エピソードタイトル: ${ep.title}`);
+      if (ep.description) {
+        speakerHints.push(
+          `エピソード説明(ゲスト紹介が含まれることが多い):\n${ep.description.slice(0, 1200)}`,
+        );
+      }
+      if (ep.showNotes?.text) {
+        speakerHints.push(
+          `Show Notes(出演者やゲスト名が含まれることが多い):\n${ep.showNotes.text.slice(0, 2000)}`,
+        );
+      }
+      if (ep.showNotes?.links && ep.showNotes.links.length > 0) {
+        // SNS / プロフィールページのリンクは話者の本名/ハンドルを示すことが多い。
+        const links = ep.showNotes.links
+          .slice(0, 20)
+          .map((l) => `  - ${l.title} (${l.url})`)
+          .join("\n");
+        speakerHints.push(`Show Notes 内リンク(出演者のプロフィール等):\n${links}`);
+      }
+
+      // Flash-Lite は asia-northeast1 で未提供なので global endpoint。
+      const vertex = getVertexGlobal();
+      const { object, usage } = await generateObject({
+        model: vertex(TRANSCRIBE_MODEL),
         schema,
+        // Gemini transcription best practices: low temperature for accuracy,
+        // generous output budget so long episodes don't get truncated.
+        temperature: 0.1,
+        maxOutputTokens: 65_536,
+        // Gemini 2.5 系は default で thinking が ON。長文 transcription のような
+        // perception タスクでは思考トークンに output budget を食われて本体が
+        // 空 response になる現象が起きるので明示的に 0 で無効化する。
+        providerOptions: {
+          vertex: {
+            thinkingConfig: { thinkingBudget: 0 },
+          },
+        },
         messages: [
           {
             role: "user",
@@ -88,16 +149,30 @@ export const transcribeEpisode = onCall<
                 type: "text",
                 text: [
                   "次のポッドキャスト音声をできる限り正確に書き起こしてください。",
-                  "- 話者ごとに `Speaker 1`, `Speaker 2` のようにラベル付けし、可能なら一貫させること",
-                  "- セグメントはおおむね1〜2文ごとに区切り、各セグメントに開始秒(start)を付ける",
+                  "",
+                  "## 話者ラベル",
+                  "可能な限り **実際の名前**(例: 「橘」「Tachibana」「Naomi」など)で speaker を埋めてください。判別のヒント:",
+                  "  1. 音声内の自己紹介や呼びかけ(「私は◯◯です」「◯◯さん、どう思いますか?」)",
+                  "  2. 下に列挙する番組情報・Show Notes に出てくる出演者名やゲスト名",
+                  "  3. 同一話者には常に同じラベルを付けること(途中でブレない)",
+                  "どうしても判別できない話者だけ `Speaker 1`, `Speaker 2` のような汎用ラベルにする。",
+                  "推測で名前を捏造しないこと(根拠が無いなら Speaker N を使う)。",
+                  "",
+                  "## セグメント",
+                  "- おおむね1〜2文ごとに区切り、各セグメントに開始秒(start)を付ける",
                   "- フィラー(えーと、あの 等)は適度に整理してよいが、内容を勝手に省略しない",
                   "- 言語は元音声の言語のまま (ja の場合は日本語)",
+                  "",
+                  "## 話者推定のための番組情報",
+                  speakerHints.length > 0
+                    ? speakerHints.join("\n\n")
+                    : "(なし — 音声内の自己紹介から判断してください)",
                 ].join("\n"),
               },
               {
                 type: "file",
                 data: new URL(gcsUri),
-                mediaType: "audio/mpeg",
+                mediaType: contentType ?? "audio/mpeg",
               },
             ],
           },
@@ -118,6 +193,17 @@ export const transcribeEpisode = onCall<
         .map((s) => (s.speaker ? `${s.speaker}: ${s.text}` : s.text))
         .join("\n");
 
+      const costUsd = actualAudioCostUsd(
+        TRANSCRIBE_MODEL,
+        usage,
+        ep.duration ?? 0,
+      );
+      const usageMeta = {
+        inputTokens: usage?.inputTokens ?? 0,
+        outputTokens: usage?.outputTokens ?? 0,
+        costUsd,
+      };
+
       const doc: TranscriptDoc = {
         episodeId,
         source: "gemini",
@@ -125,13 +211,15 @@ export const transcribeEpisode = onCall<
         text,
         segments,
         generatedAt: Date.now(),
+        model: TRANSCRIBE_MODEL,
+        usage: usageMeta,
       };
       await db.doc(`users/${uid}/transcripts/${episodeId}`).set(doc);
 
       await epRef.update({
         "transcript.status": "done",
         "transcript.source": "gemini",
-        "transcript.model": MODELS.fast,
+        "transcript.model": TRANSCRIBE_MODEL,
         "transcript.language": object.language,
         "transcript.generatedAt": Date.now(),
       });
@@ -139,6 +227,9 @@ export const transcribeEpisode = onCall<
       logger.info("transcribeEpisode: done", {
         episodeId,
         segments: segments.length,
+        inputTokens: usageMeta.inputTokens,
+        outputTokens: usageMeta.outputTokens,
+        costUsd,
       });
       return { ok: true, segments: segments.length };
     } catch (err) {
