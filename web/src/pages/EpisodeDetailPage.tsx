@@ -1,6 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
-import { ChevronLeft } from "lucide-react";
+import {
+  AlignLeft,
+  ChevronLeft,
+  FileText,
+  type LucideIcon,
+  ListOrdered,
+  MessageSquare,
+  Sparkles,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ChaptersSection } from "@/components/episode/ChaptersSection";
 import { ChatSection } from "@/components/episode/ChatSection";
@@ -14,6 +22,7 @@ import { useEpisodeRealtime } from "@/hooks/useEpisodeRealtime";
 import { getEpisode, getSummary, getTranscript } from "@/lib/episodes";
 import { getEpisodeContextFn } from "@/lib/functions";
 import { getPodcast } from "@/lib/podcasts";
+import { cn } from "@/lib/utils";
 
 export function EpisodeDetailPage() {
   const { id } = useParams({ from: "/_app/episode/$id" });
@@ -75,14 +84,23 @@ export function EpisodeDetailPage() {
   const hasNotes = !!episode?.showNotes || !!episode?.description;
   const hasChat = !!summary;
 
-  const tabs = useMemo(
+  // 並び順: 非 LLM(概要 → チャプター)を左、LLM 系(文字起こし → 要約 → AIに質問)を右。
+  const tabs = useMemo<
+    Array<{
+      value: string;
+      label: string;
+      icon: LucideIcon;
+      isLlm: boolean;
+      visible: boolean;
+    }>
+  >(
     () =>
       [
-        { value: "summary", label: "要約", visible: true },
-        { value: "transcript", label: "文字起こし", visible: true },
-        { value: "chapters", label: "チャプター", visible: hasChapters },
-        { value: "notes", label: "概要", visible: hasNotes },
-        { value: "chat", label: "AIに質問", visible: hasChat },
+        { value: "notes", label: "概要", icon: FileText, isLlm: false, visible: hasNotes },
+        { value: "chapters", label: "チャプター", icon: ListOrdered, isLlm: false, visible: hasChapters },
+        { value: "transcript", label: "文字起こし", icon: AlignLeft, isLlm: true, visible: true },
+        { value: "summary", label: "要約", icon: Sparkles, isLlm: true, visible: true },
+        { value: "chat", label: "AIに質問", icon: MessageSquare, isLlm: true, visible: hasChat },
       ].filter((t) => t.visible),
     [hasChapters, hasNotes, hasChat],
   );
@@ -113,11 +131,20 @@ export function EpisodeDetailPage() {
 
       <Tabs value={active} onValueChange={setActive}>
         <TabsList className="overflow-x-auto max-w-full justify-start no-scrollbar">
-          {tabs.map((t) => (
-            <TabsTrigger key={t.value} value={t.value}>
-              {t.label}
-            </TabsTrigger>
-          ))}
+          {tabs.map((t) => {
+            const Icon = t.icon;
+            return (
+              <TabsTrigger key={t.value} value={t.value}>
+                <Icon
+                  className={cn(
+                    "size-3.5",
+                    t.isLlm && "text-primary",
+                  )}
+                />
+                {t.label}
+              </TabsTrigger>
+            );
+          })}
         </TabsList>
 
         <TabsContent value="summary">
