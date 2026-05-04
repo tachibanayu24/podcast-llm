@@ -1,30 +1,14 @@
-import { generateObject } from "ai";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
-import { z } from "zod";
 import { db } from "./lib/admin.js";
-import { getVertex, MODELS } from "./lib/ai.js";
-import { actualAudioCostUsd } from "./lib/cost.js";
+import { transcribeWithChirp } from "./lib/chirp.js";
+import { actualCostUsd, chirpCostUsd } from "./lib/cost.js";
 import { ingestAudioToGcs } from "./lib/ingest.js";
+import { mapSpeakerNames } from "./lib/speaker-map.js";
 import type { Episode, Podcast, TranscriptDoc } from "./lib/types.js";
 
-// Flash-Lite は schema 維持力が弱く長尺で No object generated に頻発したので
-// Flash に戻して安定優先。コストは 9x だが個人用では許容。
-const TRANSCRIBE_MODEL = MODELS.fast;
-
-const schema = z.object({
-  language: z.string().describe("ISO 639-1 language code, e.g. 'ja' or 'en'"),
-  segments: z
-    .array(
-      z.object({
-        start: z.number().min(0).describe("開始秒"),
-        end: z.number().min(0).describe("終了秒").optional(),
-        speaker: z.string().describe("Speaker 1, Speaker 2 等").optional(),
-        text: z.string().min(1),
-      }),
-    )
-    .min(1),
-});
+const TRANSCRIBE_MODEL = "chirp_3";
+const NAME_MAPPING_MODEL = "gemini-2.5-flash-lite";
 
 export const transcribeEpisode = onCall<
   { episodeId: string; force?: boolean },
@@ -87,133 +71,83 @@ export const transcribeEpisode = onCall<
         });
       }
 
-      // 話者名を実名で当てさせるための手がかりを集める。
-      // 番組情報・出演者がわかる Show Notes・自己紹介がよく入っている冒頭の
-      // ヒントなどをまとめてプロンプトに同梱する。
-      const podcastSnap = await db.doc(`users/${uid}/podcasts/${ep.podcastId}`).get();
+      logger.info("transcribeEpisode: chirp start", { episodeId, gcsUri });
+      const startedAt = Date.now();
+      const chirp = await transcribeWithChirp(gcsUri);
+      logger.info("transcribeEpisode: chirp done", {
+        episodeId,
+        elapsedMs: Date.now() - startedAt,
+        rawSegments: chirp.segments.length,
+        durationSec: chirp.durationSec,
+      });
+
+      if (chirp.segments.length === 0) {
+        throw new Error("Chirp returned 0 segments");
+      }
+
+      // 話者ラベル (1, 2, ...) → 実名 のマッピングを Gemini で取得。
+      const podcastSnap = await db
+        .doc(`users/${uid}/podcasts/${ep.podcastId}`)
+        .get();
       const podcast = podcastSnap.exists
         ? (podcastSnap.data() as Podcast)
         : null;
 
-      const speakerHints: string[] = [];
-      if (podcast?.title) speakerHints.push(`番組名: ${podcast.title}`);
-      if (podcast?.author) {
-        speakerHints.push(`番組オーナー/作者: ${podcast.author}`);
-      }
-      if (podcast?.description) {
-        // 番組概要にはホスト/レギュラー出演者の名前が書かれていることが多い。
-        speakerHints.push(
-          `番組概要(常連ホストやパーソナリティ名が含まれることが多い):\n${podcast.description.slice(0, 2000)}`,
-        );
-      }
-      if (ep.title) speakerHints.push(`エピソードタイトル: ${ep.title}`);
-      if (ep.description) {
-        speakerHints.push(
-          `エピソード説明(ゲスト紹介が含まれることが多い):\n${ep.description.slice(0, 1200)}`,
-        );
-      }
-      if (ep.showNotes?.text) {
-        speakerHints.push(
-          `Show Notes(出演者やゲスト名が含まれることが多い):\n${ep.showNotes.text.slice(0, 2000)}`,
-        );
-      }
-      if (ep.showNotes?.links && ep.showNotes.links.length > 0) {
-        // SNS / プロフィールページのリンクは話者の本名/ハンドルを示すことが多い。
-        const links = ep.showNotes.links
-          .slice(0, 20)
-          .map((l) => `  - ${l.title} (${l.url})`)
-          .join("\n");
-        speakerHints.push(`Show Notes 内リンク(出演者のプロフィール等):\n${links}`);
+      let speakerMap: Record<string, string> = {};
+      let mapUsage:
+        | { inputTokens?: number; outputTokens?: number }
+        | undefined;
+      try {
+        const r = await mapSpeakerNames({
+          segments: chirp.segments,
+          episode: ep,
+          podcast,
+        });
+        speakerMap = r.mapping;
+        mapUsage = r.usage;
+        logger.info("transcribeEpisode: speaker map", {
+          episodeId,
+          mapping: speakerMap,
+        });
+      } catch (e) {
+        logger.warn("transcribeEpisode: speaker mapping failed (continuing)", {
+          episodeId,
+          err: e instanceof Error ? e.message : String(e),
+        });
       }
 
-      const vertex = getVertex();
-      const { object, usage } = await generateObject({
-        model: vertex(TRANSCRIBE_MODEL),
-        schema,
-        // Gemini transcription best practices: low temperature for accuracy,
-        // generous output budget so long episodes don't get truncated.
-        temperature: 0.1,
-        maxOutputTokens: 65_536,
-        // Gemini 2.5 系は default で thinking が ON。長文 transcription のような
-        // perception タスクでは思考トークンに output budget を食われて本体が
-        // 空 response になる現象が起きるので明示的に 0 で無効化する。
-        // audioTimestamp: 音声入力に対してタイムスタンプ精度を上げる Vertex 側
-        // の専用フラグ。input token がやや増えるが segment.start のズレが減る。
-        providerOptions: {
-          vertex: {
-            thinkingConfig: { thinkingBudget: 0 },
-            audioTimestamp: true,
-          },
-        },
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: [
-                  "次のポッドキャスト音声をできる限り正確に書き起こしてください。",
-                  "",
-                  "## 話者ラベル",
-                  "可能な限り **実際の名前**(例: 「橘」「Tachibana」「Naomi」など)で speaker を埋めてください。判別のヒント:",
-                  "  1. 音声内の自己紹介や呼びかけ(「私は◯◯です」「◯◯さん、どう思いますか?」)",
-                  "  2. 下に列挙する番組情報・Show Notes に出てくる出演者名やゲスト名",
-                  "  3. 同一話者には常に同じラベルを付けること(途中でブレない)",
-                  "どうしても判別できない話者だけ `Speaker 1`, `Speaker 2` のような汎用ラベルにする。",
-                  "推測で名前を捏造しないこと(根拠が無いなら Speaker N を使う)。",
-                  "",
-                  "## セグメント",
-                  "- おおむね1〜2文ごとに区切り、各セグメントに開始秒(start)を付ける",
-                  "- start は **その発話が音声内で実際に始まる時刻(秒)** を正確に。推測ではなく音声を聞いて時刻を取ること",
-                  "- 同一話者で時刻が前のセグメントと逆転しないよう、必ず昇順にする",
-                  "- フィラー(えーと、あの 等)は適度に整理してよいが、内容を勝手に省略しない",
-                  "- 言語は元音声の言語のまま (ja の場合は日本語)",
-                  "",
-                  "## 話者推定のための番組情報",
-                  speakerHints.length > 0
-                    ? speakerHints.join("\n\n")
-                    : "(なし — 音声内の自己紹介から判断してください)",
-                ].join("\n"),
-              },
-              {
-                type: "file",
-                data: new URL(gcsUri),
-                mediaType: contentType ?? "audio/mpeg",
-              },
-            ],
-          },
-        ],
-        maxRetries: 2,
+      // Chirp segment → TranscriptSegment 変換
+      const segments = chirp.segments.map((s) => {
+        const name = speakerMap[s.speakerLabel];
+        const speaker = name && name.trim() ? name : `Speaker ${s.speakerLabel}`;
+        return {
+          start: s.start,
+          end: s.end,
+          speaker,
+          text: s.text,
+        };
       });
-
-      const segments = object.segments
-        .map((s) => ({
-          start: Math.max(0, s.start),
-          ...(s.end != null ? { end: s.end } : {}),
-          ...(s.speaker ? { speaker: s.speaker } : {}),
-          text: s.text.trim(),
-        }))
-        .filter((s) => s.text.length > 0);
 
       const text = segments
         .map((s) => (s.speaker ? `${s.speaker}: ${s.text}` : s.text))
         .join("\n");
 
-      const costUsd = actualAudioCostUsd(
-        TRANSCRIBE_MODEL,
-        usage,
-        ep.duration ?? 0,
-      );
+      // コスト: Chirp (時間ベース) + Gemini 名寄せ (token ベース)
+      const audioSec = chirp.durationSec || ep.duration || 0;
+      const chirpUsd = chirpCostUsd(audioSec, "standard");
+      const mapUsd = actualCostUsd(NAME_MAPPING_MODEL, mapUsage);
+      const costUsd = chirpUsd + mapUsd;
+
       const usageMeta = {
-        inputTokens: usage?.inputTokens ?? 0,
-        outputTokens: usage?.outputTokens ?? 0,
+        inputTokens: mapUsage?.inputTokens ?? 0,
+        outputTokens: mapUsage?.outputTokens ?? 0,
         costUsd,
       };
 
       const doc: TranscriptDoc = {
         episodeId,
         source: "gemini",
-        language: object.language,
+        language: chirp.language,
         text,
         segments,
         generatedAt: Date.now(),
@@ -226,15 +160,16 @@ export const transcribeEpisode = onCall<
         "transcript.status": "done",
         "transcript.source": "gemini",
         "transcript.model": TRANSCRIBE_MODEL,
-        "transcript.language": object.language,
+        "transcript.language": chirp.language,
         "transcript.generatedAt": Date.now(),
       });
 
       logger.info("transcribeEpisode: done", {
         episodeId,
         segments: segments.length,
-        inputTokens: usageMeta.inputTokens,
-        outputTokens: usageMeta.outputTokens,
+        durationSec: audioSec,
+        chirpUsd,
+        mapUsd,
         costUsd,
       });
       return { ok: true, segments: segments.length };

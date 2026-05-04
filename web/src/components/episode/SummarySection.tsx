@@ -184,7 +184,7 @@ export function SummarySection({ episodeId, episode, hideTitle }: Props) {
             ? Math.round(episode.duration / 60)
             : null;
           const transcribeCost = episode.duration
-            ? estimateTranscribeCostUsd(episode.duration, "gemini-2.5-flash")
+            ? estimateTranscribeCostUsd(episode.duration)
             : 0;
 
           return (

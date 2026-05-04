@@ -28,11 +28,16 @@ export const AUDIO_TOKENS_PER_SEC = 32;
 // 文字起こしの出力分量の経験値: 1秒あたり 約10 tokens (60分で 36k tokens 程度)
 const OUTPUT_TOKENS_PER_SEC = 10;
 
+// Speech-to-Text V2 / Chirp 3 価格(USD per minute)
+// https://cloud.google.com/speech-to-text/pricing
+export const CHIRP_USD_PER_MIN_STANDARD = 0.016;
+export const CHIRP_USD_PER_MIN_DYNAMIC_BATCH = 0.004;
+
 function pricingOf(model: string): ModelPricing {
   return PRICING[model] ?? PRICING["gemini-2.5-flash"]!;
 }
 
-/** 文字起こしコストの事前見積 (durationSec のみで概算)。 */
+/** 文字起こしコスト(Gemini)の事前見積 (durationSec のみで概算)。 */
 export function estimateTranscribeCostUsd(
   durationSec: number,
   model: string,
@@ -42,6 +47,19 @@ export function estimateTranscribeCostUsd(
   const audioTokens = durationSec * AUDIO_TOKENS_PER_SEC;
   const outputTokens = durationSec * OUTPUT_TOKENS_PER_SEC;
   return (audioTokens * p.audioIn + outputTokens * p.textOut) / 1_000_000;
+}
+
+/** Chirp 3 のコスト計算 (durationSec から)。 */
+export function chirpCostUsd(
+  durationSec: number,
+  tier: "standard" | "dynamicBatch" = "standard",
+): number {
+  if (!durationSec || durationSec <= 0) return 0;
+  const rate =
+    tier === "dynamicBatch"
+      ? CHIRP_USD_PER_MIN_DYNAMIC_BATCH
+      : CHIRP_USD_PER_MIN_STANDARD;
+  return (durationSec / 60) * rate;
 }
 
 /** usage から実コストを算出 (純テキスト I/O 用)。 */
