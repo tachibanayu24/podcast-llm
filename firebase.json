@@ -4,6 +4,7 @@
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "rewrites": [
       { "source": "/api/chat", "function": { "functionId": "chatWithEpisode", "region": "asia-northeast1" } },
+      { "source": "/api/audio", "function": { "functionId": "audioProxy", "region": "asia-northeast1" } },
       { "source": "**", "destination": "/index.html" }
     ],
     "headers": [

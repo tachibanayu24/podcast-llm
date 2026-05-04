@@ -26,11 +26,22 @@ export interface DownloadProgress {
 
 export async function downloadAudio(
   episodeId: string,
-  url: string,
+  _url: string,
   onProgress?: (p: DownloadProgress) => void,
   signal?: AbortSignal,
 ): Promise<void> {
-  const res = await fetch(url, { signal, mode: "cors" });
+  const user = auth.currentUser;
+  if (!user) throw new Error("ログインが必要です");
+  const idToken = await user.getIdToken();
+
+  // 配信元の多くが CORS を返さないため、Cloud Functions 側のプロキシを経由する。
+  // Hosting rewrite (/api/audio) はレスポンス 32MB 上限があるので、関数の URL を直接叩く。
+  const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+  const proxyUrl = `https://asia-northeast1-${projectId}.cloudfunctions.net/audioProxy?episodeId=${encodeURIComponent(episodeId)}`;
+  const res = await fetch(proxyUrl, {
+    signal,
+    headers: { Authorization: `Bearer ${idToken}` },
+  });
   if (!res.ok || !res.body) {
     throw new Error(`download failed: ${res.status}`);
   }

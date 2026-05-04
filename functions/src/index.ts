@@ -10,3 +10,4 @@ export { transcribeEpisode } from "./transcribe";
 export { summarizeEpisode } from "./summarize";
 export { translateSummary } from "./translate";
 export { chatWithEpisode } from "./chat";
+export { audioProxy } from "./audio-proxy";
