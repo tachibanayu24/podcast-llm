@@ -138,7 +138,26 @@ export function SummarySection({ episodeId, episode, hideTitle }: Props) {
         )
       }
     >
-      {!summary && (
+      {!summary && episode.summary?.status === "pending" && (
+        <Card className="p-6 text-center space-y-2">
+          <p className="text-sm text-muted-foreground">
+            生成中です。1〜数分かかります…
+          </p>
+          <p className="text-xs text-muted-foreground">
+            画面を閉じても処理は続きます。完了後に開けば結果が反映されます。
+          </p>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => generate.mutate()}
+            className="text-xs text-muted-foreground"
+          >
+            やり直す
+          </Button>
+        </Card>
+      )}
+
+      {!summary && episode.summary?.status !== "pending" && (
         <Card className="p-6 text-center space-y-3">
           <Sparkles className="size-6 text-muted-foreground mx-auto" />
           <div className="space-y-1">

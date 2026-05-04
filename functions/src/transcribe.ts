@@ -3,12 +3,14 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
 import { z } from "zod";
 import { db } from "./lib/admin.js";
-import { getVertexGlobal, MODELS } from "./lib/ai.js";
+import { getVertex, MODELS } from "./lib/ai.js";
 import { actualAudioCostUsd } from "./lib/cost.js";
 import { ingestAudioToGcs } from "./lib/ingest.js";
 import type { Episode, Podcast, TranscriptDoc } from "./lib/types.js";
 
-const TRANSCRIBE_MODEL = MODELS.lite;
+// Flash-Lite は schema 維持力が弱く長尺で No object generated に頻発したので
+// Flash に戻して安定優先。コストは 9x だが個人用では許容。
+const TRANSCRIBE_MODEL = MODELS.fast;
 
 const schema = z.object({
   language: z.string().describe("ISO 639-1 language code, e.g. 'ja' or 'en'"),
@@ -124,16 +126,14 @@ export const transcribeEpisode = onCall<
         speakerHints.push(`Show Notes 内リンク(出演者のプロフィール等):\n${links}`);
       }
 
-      // Flash-Lite は asia-northeast1 で未提供なので global endpoint。
-      const vertex = getVertexGlobal();
+      const vertex = getVertex();
       const { object, usage } = await generateObject({
         model: vertex(TRANSCRIBE_MODEL),
         schema,
         // Gemini transcription best practices: low temperature for accuracy,
         // generous output budget so long episodes don't get truncated.
-        // Flash-Lite の output cap は 64,000 tokens。
         temperature: 0.1,
-        maxOutputTokens: 64_000,
+        maxOutputTokens: 65_536,
         // Gemini 2.5 系は default で thinking が ON。長文 transcription のような
         // perception タスクでは思考トークンに output budget を食われて本体が
         // 空 response になる現象が起きるので明示的に 0 で無効化する。

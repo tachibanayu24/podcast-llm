@@ -10,6 +10,7 @@ import { SummarySection } from "@/components/episode/SummarySection";
 import { TranscriptSection } from "@/components/episode/TranscriptSection";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useEpisodeRealtime } from "@/hooks/useEpisodeRealtime";
 import { getEpisode, getSummary, getTranscript } from "@/lib/episodes";
 import { getEpisodeContextFn } from "@/lib/functions";
 import { getPodcast } from "@/lib/podcasts";
@@ -17,6 +18,10 @@ import { getPodcast } from "@/lib/podcasts";
 export function EpisodeDetailPage() {
   const { id } = useParams({ from: "/_app/episode/$id" });
   const queryClient = useQueryClient();
+
+  // Firestore のエピソード doc をリアルタイム購読し、サーバ側の status 変化
+  // (transcript/summary の生成完了など)を即時 UI に反映する。
+  useEpisodeRealtime(id);
 
   const episodeQuery = useQuery({
     queryKey: ["episode", id],

@@ -114,6 +114,9 @@ export function TranscriptSection({
           <p className="text-sm text-muted-foreground">
             生成中です。1〜数分かかります…
           </p>
+          <p className="text-xs text-muted-foreground">
+            画面を閉じても処理は続きます。完了後に開けば結果が反映されます。
+          </p>
           <Button
             variant="ghost"
             size="sm"
