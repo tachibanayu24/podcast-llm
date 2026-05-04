@@ -31,15 +31,17 @@ export const getEpisodeContextFn = httpsCallable<
   }
 >(functions, "getEpisodeContext");
 
+// httpsCallable のクライアント側デフォルト timeout は 70 秒。
+// LLM 系は server 側 timeoutSeconds に合わせて長めに上書きする。
 export const summarizeEpisodeFn = httpsCallable<
   { episodeId: string; force?: boolean },
   { ok: true; tier: "transcript" | "shownotes" | "minimal" }
->(functions, "summarizeEpisode");
+>(functions, "summarizeEpisode", { timeout: 300_000 });
 
 export const transcribeEpisodeFn = httpsCallable<
   { episodeId: string; force?: boolean },
   { ok: true; segments: number }
->(functions, "transcribeEpisode");
+>(functions, "transcribeEpisode", { timeout: 540_000 });
 
 export const translateSummaryFn = httpsCallable<
   {
@@ -48,4 +50,4 @@ export const translateSummaryFn = httpsCallable<
     targetLanguage?: string;
   },
   { ok: true }
->(functions, "translateSummary");
+>(functions, "translateSummary", { timeout: 300_000 });
