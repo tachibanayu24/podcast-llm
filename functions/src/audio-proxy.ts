@@ -17,7 +17,13 @@ export const audioProxy = onRequest(
     maxInstances: 5,
     timeoutSeconds: 540,
     memory: "512MiB",
-    cors: true,
+    // 本人専用 PWA。Hosting URL とカスタムドメイン、ローカル dev のみ許可。
+    cors: [
+      /^https:\/\/podcast-llm-495107\.web\.app$/,
+      /^https:\/\/podcast-llm-495107\.firebaseapp\.com$/,
+      /^https:\/\/podcast\.tachibanayu24\.com$/,
+      /^http:\/\/localhost(:\d+)?$/,
+    ],
     invoker: "public",
   },
   async (req, res) => {

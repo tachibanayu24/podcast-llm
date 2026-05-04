@@ -131,8 +131,9 @@ export const transcribeEpisode = onCall<
         schema,
         // Gemini transcription best practices: low temperature for accuracy,
         // generous output budget so long episodes don't get truncated.
+        // Flash-Lite の output cap は 64,000 tokens。
         temperature: 0.1,
-        maxOutputTokens: 65_536,
+        maxOutputTokens: 64_000,
         // Gemini 2.5 系は default で thinking が ON。長文 transcription のような
         // perception タスクでは思考トークンに output budget を食われて本体が
         // 空 response になる現象が起きるので明示的に 0 で無効化する。

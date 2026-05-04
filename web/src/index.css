@@ -339,3 +339,7 @@
   background: color-mix(in oklch, var(--color-foreground) 6%, transparent);
   font-weight: 600;
 }
+
+/* タブの横スクロール時にスクロールバーを隠す */
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
